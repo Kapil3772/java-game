@@ -34,14 +34,14 @@ class PhysicsEntity {
 
 class Player extends PhysicsEntity {
     double speed;
-    double []velocity;
+    double[] velocity;
 
     public Player(double x, double y, int w, int h) {
         super(x, y, w, h);
-        this.velocity = new double[]{100,0};
+        this.velocity = new double[] { 100, 0 };
     }
 
-    public void update(double dt, int []moving) {
+    public void update(double dt, int[] moving) {
         prevX = xPos;
         prevY = yPos;
 
@@ -60,7 +60,7 @@ class Player extends PhysicsEntity {
     }
 }
 
-class App extends JFrame implements MouseListener {
+class App extends JFrame {
     // Class Constants
     private static final int FRAME_HEIGHT = 500;
     private static final int FRAME_WIDTH = 500;
@@ -77,7 +77,7 @@ class App extends JFrame implements MouseListener {
     private long lastNs = System.nanoTime();
     int framescount = 1;
 
-    boolean movingRight = false, movingLeft = false;
+    boolean movingRight = false, movingLeft = false, movingUp = false, movingDown = false;
 
     JPanel panel;
     Player player;
@@ -88,6 +88,12 @@ class App extends JFrame implements MouseListener {
         this.player = new Player(10, 10, 100, 100);
         // Add a custom drawing panel
         this.panel = new JPanel() {
+            {
+                setFocusable(true);
+                requestFocusInWindow(); // important
+                setupKeyBindings(this);
+            }
+
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g); // clear paper
@@ -96,12 +102,85 @@ class App extends JFrame implements MouseListener {
                 // Player render
                 player.render(g);
             }
+
+            void setupKeyBindings(JComponent comp) {
+                InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+                ActionMap am = comp.getActionMap();
+
+                // LEFT
+                im.put(KeyStroke.getKeyStroke("pressed A"), "leftPressed");
+                im.put(KeyStroke.getKeyStroke("released A"), "leftReleased");
+
+                am.put("leftPressed", new AbstractAction() {
+                    public void actionPerformed(ActionEvent e) {
+                        movingLeft = true;
+                    }
+                });
+
+                am.put("leftReleased", new AbstractAction() {
+                    public void actionPerformed(ActionEvent e) {
+                        movingLeft = false;
+                    }
+                });
+
+                // RIGHT
+                im.put(KeyStroke.getKeyStroke("pressed D"), "rightPressed");
+                im.put(KeyStroke.getKeyStroke("released D"), "rightReleased");
+
+                am.put("rightPressed", new AbstractAction() {
+                    public void actionPerformed(ActionEvent e) {
+                        movingRight = true;
+                    }
+                });
+
+                am.put("rightReleased", new AbstractAction() {
+                    public void actionPerformed(ActionEvent e) {
+                        movingRight = false;
+                    }
+                });
+
+                // JUMP space
+                im.put(KeyStroke.getKeyStroke("pressed Space"), "spaceBarPressed");
+
+                am.put("spaceBarPressed", new AbstractAction() {
+                    public void actionPerformed(ActionEvent e) {
+                        // jump = true;
+                    }
+                });
+            }
+
         };
         add(panel);
         panel.repaint();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
-        addMouseListener(this);
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    movingRight = true;
+                } else {
+                    movingLeft = true;
+                }
+            };
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    movingRight = false;
+                } else {
+                    movingLeft = false;
+                }
+            };
+        });
+        addWindowFocusListener(new WindowAdapter() {
+            @Override
+            public void windowLostFocus(WindowEvent e) {
+                movingLeft = false;
+                movingRight = false;
+                // jump = false;
+            }
+        });
         run(running);
     }
 
@@ -119,7 +198,7 @@ class App extends JFrame implements MouseListener {
                 frameStepAccumulator -= UPDATE_STEP_DURATION;
             }
 
-            System.out.println("Physics Updates in this frame: " + updateCounter);
+            // System.out.println("Physics Updates in this frame: " + updateCounter);
 
             interpolationFactor = frameStepAccumulator / UPDATE_STEP_DURATION;
             updateInterpolation(interpolationFactor);
@@ -160,31 +239,6 @@ class App extends JFrame implements MouseListener {
     public void render() {
         panel.repaint();
     }
-
-    public void mousePressed(MouseEvent e) {
-        if (SwingUtilities.isLeftMouseButton(e)) {
-            movingRight = true;
-        } else {
-            movingLeft = true;
-        }
-    };
-
-    public void mouseReleased(MouseEvent e) {
-        if (SwingUtilities.isLeftMouseButton(e)) {
-            movingRight = false;
-        } else {
-            movingLeft = false;
-        }
-    };
-
-    public void mouseClicked(MouseEvent e) {
-    };
-
-    public void mouseEntered(MouseEvent e) {
-    };
-
-    public void mouseExited(MouseEvent e) {
-    };
 
     public static void main(String[] args) {
         new App();
