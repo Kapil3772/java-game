@@ -24,6 +24,17 @@ class Rect {
     }
 }
 
+class RenderOffset {
+    int x, y, w, h;
+
+    public RenderOffset(int x, int y, int w, int h) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+    }
+}
+
 class PhysicsEntity {
     double xPos, yPos, alphaX, alphaY, prevX, prevY;
     int w, h; // in pixels
@@ -41,6 +52,7 @@ class PhysicsEntity {
 class Player extends PhysicsEntity {
     double[] velocity;
     BufferedImage sprite;
+    RenderOffset renderOffset = new RenderOffset(-50, -45, 100, 80);
 
     public Player(double x, double y, int w, int h) {
         super(x, y, w, h);
@@ -62,11 +74,14 @@ class Player extends PhysicsEntity {
 
     public void render(Graphics g) {
         if (sprite != null) {
-            g.drawImage(sprite, (int) alphaX, (int) alphaY, w, h, null);
+            g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y, w + renderOffset.w,
+                    h + renderOffset.h, null);
         } else {
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, w, h);
         }
+        g.setColor(Color.BLUE);
+        g.drawRect((int) alphaX, (int) alphaY, w, h);
     }
 }
 
@@ -86,7 +101,7 @@ class App extends JFrame {
     private double frameStepAccumulator;
     private double interpolationFactor;
 
-    //image variables
+    // image variables
     private final GameImage loader = new GameImage();
 
     // instance variables
@@ -98,13 +113,13 @@ class App extends JFrame {
 
     JPanel panel;
 
-    //Entities
+    // Entities
     Player player;
 
     public App() {
         setTitle("Game");
         setSize(FRAME_WIDTH, FRAME_HEIGHT);
-        this.player = new Player(10, 10, 100, 100);
+        this.player = new Player(10, 10, 40, 80);
         // Add a custom drawing panel
         this.panel = new JPanel() {
             {
@@ -204,7 +219,7 @@ class App extends JFrame {
         gameThread.start();
     }
 
-    public void loadAll(){
+    public void loadAll() {
         player.sprite = loader.loadImage("player/player.png");
 
     }
