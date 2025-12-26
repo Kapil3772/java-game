@@ -66,11 +66,15 @@ class App extends JFrame {
     private static final int FRAME_WIDTH = 500;
     private static final int FPS = 60;
 
+    private static final long GAME_LOOP_FREQUENCY = 80;
+    private static final long LOOP_DURATION_NS = 1_000_000_000 / GAME_LOOP_FREQUENCY;
+
     private static final double UPDATE_FREQUENCY = FPS;
     private static final double UPDATE_STEP_DURATION = 1.0 / UPDATE_FREQUENCY;
+    public static int updateCounter;
+
     private double frameStepAccumulator;
     private double interpolationFactor;
-    private int updateCounter = 0;
 
     // instance variables
     private boolean running = true;
@@ -151,9 +155,6 @@ class App extends JFrame {
 
         };
         add(panel);
-        panel.repaint();
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setVisible(true);
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -181,19 +182,35 @@ class App extends JFrame {
                 // jump = false;
             }
         });
-        run(running);
+
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setVisible(true);
+        Thread gameThread = new Thread(() -> run(running));
+        gameThread.start();
     }
 
     public void run(boolean isRunning) {
+        long computedFrameDuration, sleepDuration;
+        long millis;
+        int nanos;
+        //long frames = 0;
+        //long start = System.nanoTime();
         while (isRunning) {
+            /*frames++;
+            if (System.nanoTime() - start >= 1_000_000_000L) { // 1 second
+                System.out.println("Loops per second: " + frames);
+                frames = 0;
+                start = System.nanoTime();
+            }*/
             updateCounter = 0;
             long nowNs = System.nanoTime();
-            double deltaTime = (nowNs - lastNs) / 1000_000_000.0;
+            double deltaTime = (nowNs - lastNs) / 1000_000_000.0; // Means Previous Frame Duration
             lastNs = nowNs;
             frameStepAccumulator += deltaTime;
 
             // fixed updates
             while (frameStepAccumulator >= UPDATE_STEP_DURATION) {
+                // Update
                 update(UPDATE_STEP_DURATION);
                 frameStepAccumulator -= UPDATE_STEP_DURATION;
             }
@@ -205,6 +222,18 @@ class App extends JFrame {
 
             // Render
             render();
+
+            // Calculating Sleep Duration
+            computedFrameDuration = (System.nanoTime() - nowNs); // is in ns
+            if (computedFrameDuration < LOOP_DURATION_NS) {
+                sleepDuration = LOOP_DURATION_NS - computedFrameDuration;
+                millis = sleepDuration / 1_000_000;
+                nanos = (int) (sleepDuration % 1_000_000);
+                try {
+                    Thread.sleep(millis, nanos);
+                } catch (InterruptedException e) {
+                }
+            }
         }
     }
 
