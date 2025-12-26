@@ -2,6 +2,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 
+//for image and file handels
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.File;
+import java.io.IOException;
+
 class Rect {
     double x, y; // actual Pos after each update
     double alphaX, alphaY; // allpha means interpolated pos
@@ -33,8 +39,8 @@ class PhysicsEntity {
 }
 
 class Player extends PhysicsEntity {
-    double speed;
     double[] velocity;
+    BufferedImage sprite;
 
     public Player(double x, double y, int w, int h) {
         super(x, y, w, h);
@@ -55,8 +61,12 @@ class Player extends PhysicsEntity {
     }
 
     public void render(Graphics g) {
-        g.setColor(Color.RED);
-        g.fillRect((int) alphaX, (int) alphaY, w, h);
+        if (sprite != null) {
+            g.drawImage(sprite, (int) alphaX, (int) alphaY, w, h, null);
+        } else {
+            g.setColor(Color.RED); // fallback
+            g.fillRect((int) alphaX, (int) alphaY, w, h);
+        }
     }
 }
 
@@ -76,6 +86,9 @@ class App extends JFrame {
     private double frameStepAccumulator;
     private double interpolationFactor;
 
+    //image variables
+    private final GameImage loader = new GameImage();
+
     // instance variables
     private boolean running = true;
     private long lastNs = System.nanoTime();
@@ -84,6 +97,8 @@ class App extends JFrame {
     boolean movingRight = false, movingLeft = false, movingUp = false, movingDown = false;
 
     JPanel panel;
+
+    //Entities
     Player player;
 
     public App() {
@@ -189,19 +204,27 @@ class App extends JFrame {
         gameThread.start();
     }
 
+    public void loadAll(){
+        player.sprite = loader.loadImage("player/player.png");
+
+    }
+
     public void run(boolean isRunning) {
         long computedFrameDuration, sleepDuration;
         long millis;
         int nanos;
-        //long frames = 0;
-        //long start = System.nanoTime();
+        loadAll();
+        // long frames = 0;
+        // long start = System.nanoTime();
         while (isRunning) {
-            /*frames++;
-            if (System.nanoTime() - start >= 1_000_000_000L) { // 1 second
-                System.out.println("Loops per second: " + frames);
-                frames = 0;
-                start = System.nanoTime();
-            }*/
+            /*
+             * frames++;
+             * if (System.nanoTime() - start >= 1_000_000_000L) { // 1 second
+             * System.out.println("Loops per second: " + frames);
+             * frames = 0;
+             * start = System.nanoTime();
+             * }
+             */
             updateCounter = 0;
             long nowNs = System.nanoTime();
             double deltaTime = (nowNs - lastNs) / 1000_000_000.0; // Means Previous Frame Duration
@@ -248,9 +271,12 @@ class App extends JFrame {
         player.update(dt, moving);
 
         // Other future entities updates here
-        if (framescount % 60 == 0) {
-            // lagSpike();
-        }
+
+        /*
+         * if (framescount % 60 == 0) {
+         * lagSpike();
+         * }
+         */
     }
 
     public void updateInterpolation(double ipf) {
@@ -271,5 +297,29 @@ class App extends JFrame {
 
     public static void main(String[] args) {
         new App();
+    }
+}
+
+class GameImage {
+    public BufferedImage loadImage(String path) {
+        try {
+            var url = getClass().getResource(path);
+            if (url == null) {
+                throw new RuntimeException("Resource not Found : " + path);
+            }
+            return ImageIO.read(url);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Failed to load image: " + path, e);
+        }
+    }
+
+    public BufferedImage[] loadImages(String folderPath, int n) {
+        BufferedImage[] images = new BufferedImage[n];
+        for (int i = 0; i < n; i++) {
+            images[i] = loadImage(folderPath + "/" + i + ".png");
+        }
+        return images;
     }
 }
