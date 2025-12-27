@@ -1,6 +1,8 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.Map;
+import java.util.HashMap;
 
 //for image and file handels
 import java.awt.image.BufferedImage;
@@ -52,7 +54,7 @@ class PhysicsEntity {
 class Player extends PhysicsEntity {
     double[] velocity;
     BufferedImage sprite;
-    RenderOffset renderOffset = new RenderOffset(-50, -45, 100, 80);
+    RenderOffset renderOffset = new RenderOffset(0, 0, 0, 0);
 
     public Player(double x, double y, int w, int h) {
         super(x, y, w, h);
@@ -115,11 +117,11 @@ class App extends JFrame {
 
     // Entities
     Player player;
+    Asset assets;
 
     public App() {
         setTitle("Game");
         setSize(FRAME_WIDTH, FRAME_HEIGHT);
-        this.player = new Player(10, 10, 40, 80);
         // Add a custom drawing panel
         this.panel = new JPanel() {
             {
@@ -212,7 +214,9 @@ class App extends JFrame {
                 // jump = false;
             }
         });
+        assets = new Asset();
 
+        this.player = new Player(10, 10, 64, 64);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
         Thread gameThread = new Thread(() -> run(running));
@@ -220,8 +224,9 @@ class App extends JFrame {
     }
 
     public void loadAll() {
-        player.sprite = loader.loadImage("player/player.png");
-
+        //assets.load("playerIdle", "player/IDLE");
+        Animation playerIdle = new Animation("player/IDLE.png", new int[]{32, 32}, new int[]{96,96}, 10);
+        player.sprite = playerIdle.getCurrentFrame();
     }
 
     public void run(boolean isRunning) {
@@ -336,5 +341,44 @@ class GameImage {
             images[i] = loadImage(folderPath + "/" + i + ".png");
         }
         return images;
+    }
+}
+
+class Animation {
+    int framesCount, canvasW, canvasH;
+    int[] spriteSize;
+    BufferedImage[] frames;
+    GameImage loader;
+
+    public Animation(String path, int[] spriteSize, int[]canvasSize, int framesCount) {
+        this.framesCount = framesCount;
+        this.canvasW = canvasSize[0];
+        this.canvasH = canvasSize[1];
+        this.spriteSize = spriteSize;
+        frames = loadAnimation(path);
+    }
+    public BufferedImage[] loadAnimation(String path) {
+        BufferedImage spriteSheet = new GameImage().loadImage(path);
+        BufferedImage[] bufferedImageArray = new BufferedImage[framesCount];
+        int xOffset, yOffset;
+        xOffset = (canvasW - spriteSize[0]) / 2;
+        yOffset = (canvasH - spriteSize[1]) / 2;
+        for(int i = 0; i<framesCount; i++){
+            bufferedImageArray[i] = spriteSheet.getSubimage((i*canvasW)+ xOffset , 0 + 49, spriteSize[0], spriteSize[1]);
+        }
+        return bufferedImageArray;
+    }
+
+    public BufferedImage getCurrentFrame(){
+        return frames[0];
+    }
+}
+
+class Asset {
+    GameImage assetLoader = new GameImage();
+    Map<String, BufferedImage> animations = new HashMap<>();
+
+    public void load(String animName, String path) {
+        animations.put(animName, assetLoader.loadImage(path + ".png"));
     }
 }
