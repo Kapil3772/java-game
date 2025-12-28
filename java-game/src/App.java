@@ -51,14 +51,29 @@ class PhysicsEntity {
     }
 }
 
+enum PlayerAnimState {
+    IDLE,
+    WALK,
+    RUN
+}
+
 class Player extends PhysicsEntity {
     double[] velocity;
     BufferedImage sprite;
     RenderOffset renderOffset = new RenderOffset(0, 0, 0, 0);
+    Animation currentAnimation;
+    PlayerAnimState currAnimState;
+    PlayerAnimState nextAnimState;
+    boolean isMoving;
+    App game;
 
-    public Player(double x, double y, int w, int h) {
+    public Player(App game, double x, double y, int w, int h) {
         super(x, y, w, h);
-        this.velocity = new double[] { 100, 0 };
+        this.velocity = new double[] { 80, 0 };
+        this.game = game;
+        this.currAnimState = PlayerAnimState.IDLE;
+        this.currentAnimation = game.playerIdle;
+        this.isMoving = false;
     }
 
     public void update(double dt, int[] moving) {
@@ -67,6 +82,43 @@ class Player extends PhysicsEntity {
 
         xPos += velocity[0] * moving[0] * dt;
         yPos += velocity[1] * moving[1] * dt;
+
+        if (moving[0] == 1 || moving[0] == -1) {
+            this.isMoving = true;
+        } else {
+            this.isMoving = false;
+        }
+
+        System.out.println(game.inputs.isRunning + "," + isMoving);
+        updateAnimation();
+    }
+
+    public void updateAnimation() {
+        if (isMoving && game.inputs.isRunning) {
+            this.nextAnimState = PlayerAnimState.RUN;
+        } else if (isMoving) {
+            this.nextAnimState = PlayerAnimState.WALK;
+        } else {
+            this.nextAnimState = PlayerAnimState.IDLE;
+        }
+        if (nextAnimState != currAnimState) {
+            currAnimState = nextAnimState;
+            switch (currAnimState) {
+                case RUN:
+                    this.currentAnimation = game.playerRun;
+                    break;
+                case WALK:
+                    this.currentAnimation = game.playerWalk;
+                    break;
+                case IDLE:
+                    this.currentAnimation = game.playerIdle;
+                    break;
+                default:
+                    break;
+            }
+            currentAnimation.reset();
+        }
+        sprite = currentAnimation.getCurrentFrame(game.deltaTime);
     }
 
     public void updateInterpolation(double ipf) {
@@ -76,15 +128,25 @@ class Player extends PhysicsEntity {
 
     public void render(Graphics g) {
         if (sprite != null) {
+
             g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y, w + renderOffset.w,
                     h + renderOffset.h, null);
         } else {
+            System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, w, h);
         }
         g.setColor(Color.BLUE);
         g.drawRect((int) alphaX, (int) alphaY, w, h);
     }
+}
+
+class InputState {
+    boolean movingRight = false; // d
+    boolean movingLeft = false; // a
+    boolean movingUp = false; // w
+    boolean movingDown = false; // s
+    boolean isRunning = false; // shift
 }
 
 class App extends JFrame {
@@ -95,7 +157,9 @@ class App extends JFrame {
 
     private static final long GAME_LOOP_FREQUENCY = 80;
     private static final long LOOP_DURATION_NS = 1_000_000_000 / GAME_LOOP_FREQUENCY;
+    public long computedFrameDuration;
 
+    public double deltaTime;
     private static final double UPDATE_FREQUENCY = FPS;
     private static final double UPDATE_STEP_DURATION = 1.0 / UPDATE_FREQUENCY;
     public static int updateCounter;
@@ -111,23 +175,24 @@ class App extends JFrame {
     private long lastNs = System.nanoTime();
     int framescount = 1;
 
-    boolean movingRight = false, movingLeft = false, movingUp = false, movingDown = false;
-
+    InputState inputs = new InputState();
     JPanel panel;
 
     // Entities
     Player player;
     Asset assets;
+    Animation playerIdle, playerWalk, playerRun;
 
     public App() {
         setTitle("Game");
         setSize(FRAME_WIDTH, FRAME_HEIGHT);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setVisible(true);
         // Add a custom drawing panel
         this.panel = new JPanel() {
             {
                 setFocusable(true);
                 requestFocusInWindow(); // important
-                setupKeyBindings(this);
             }
 
             @Override
@@ -138,105 +203,74 @@ class App extends JFrame {
                 // Player render
                 player.render(g);
             }
-
-            void setupKeyBindings(JComponent comp) {
-                InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-                ActionMap am = comp.getActionMap();
-
-                // LEFT
-                im.put(KeyStroke.getKeyStroke("pressed A"), "leftPressed");
-                im.put(KeyStroke.getKeyStroke("released A"), "leftReleased");
-
-                am.put("leftPressed", new AbstractAction() {
-                    public void actionPerformed(ActionEvent e) {
-                        movingLeft = true;
-                    }
-                });
-
-                am.put("leftReleased", new AbstractAction() {
-                    public void actionPerformed(ActionEvent e) {
-                        movingLeft = false;
-                    }
-                });
-
-                // RIGHT
-                im.put(KeyStroke.getKeyStroke("pressed D"), "rightPressed");
-                im.put(KeyStroke.getKeyStroke("released D"), "rightReleased");
-
-                am.put("rightPressed", new AbstractAction() {
-                    public void actionPerformed(ActionEvent e) {
-                        movingRight = true;
-                    }
-                });
-
-                am.put("rightReleased", new AbstractAction() {
-                    public void actionPerformed(ActionEvent e) {
-                        movingRight = false;
-                    }
-                });
-
-                // JUMP space
-                im.put(KeyStroke.getKeyStroke("pressed Space"), "spaceBarPressed");
-
-                am.put("spaceBarPressed", new AbstractAction() {
-                    public void actionPerformed(ActionEvent e) {
-                        // jump = true;
-                    }
-                });
-            }
-
         };
         add(panel);
+
+        // Keyboard Inputs Handeling
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(e -> {
+            boolean pressed = e.getID() == KeyEvent.KEY_PRESSED;
+
+            switch (e.getKeyCode()) {
+                case KeyEvent.VK_A -> inputs.movingLeft = pressed;
+                case KeyEvent.VK_D -> inputs.movingRight = pressed;
+                case KeyEvent.VK_SHIFT -> inputs.isRunning = pressed;
+            }
+            return false;
+        });
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
-                    movingRight = true;
+                    inputs.movingRight = true;
                 } else {
-                    movingLeft = true;
+                    inputs.movingLeft = true;
                 }
             };
 
             @Override
             public void mouseReleased(MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
-                    movingRight = false;
+                    inputs.movingRight = false;
                 } else {
-                    movingLeft = false;
+                    inputs.movingLeft = false;
                 }
             };
         });
         addWindowFocusListener(new WindowAdapter() {
             @Override
             public void windowLostFocus(WindowEvent e) {
-                movingLeft = false;
-                movingRight = false;
+                inputs.movingLeft = false;
+                inputs.movingRight = false;
+                inputs.isRunning = false;
                 // jump = false;
             }
         });
         assets = new Asset();
 
-        this.player = new Player(10, 10, 64, 64);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setVisible(true);
+        loadAll();
+
+        this.player = new Player(this, 10, 10, 64, 64);
+
         Thread gameThread = new Thread(() -> run(running));
         gameThread.start();
     }
 
     public void loadAll() {
-        //assets.load("playerIdle", "player/IDLE");
-        Animation playerIdle = new Animation("player/IDLE.png", new int[]{32, 32}, new int[]{96,96}, 10);
-        player.sprite = playerIdle.getCurrentFrame();
+        // assets.load("playerIdle", "player/IDLE");
+        playerIdle = new Animation("player/IDLE.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 10, 10);
+        // player.sprite = playerIdle.getCurrentFrame(computedFrameDuration);
+        playerWalk = new Animation("player/WALK.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 12, 10);
+
+        playerRun = new Animation("player/RUN.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 16, 10);
     }
 
-    public void run(boolean isRunning) {
-        long computedFrameDuration, sleepDuration;
+    public void run(boolean running) {
+        long sleepDuration;
         long millis;
         int nanos;
-        loadAll();
         // long frames = 0;
         // long start = System.nanoTime();
-        while (isRunning) {
+        while (running) {
             /*
              * frames++;
              * if (System.nanoTime() - start >= 1_000_000_000L) { // 1 second
@@ -247,7 +281,7 @@ class App extends JFrame {
              */
             updateCounter = 0;
             long nowNs = System.nanoTime();
-            double deltaTime = (nowNs - lastNs) / 1000_000_000.0; // Means Previous Frame Duration
+            deltaTime = (nowNs - lastNs) / 1000_000_000.0; // Means Previous Frame Duration
             lastNs = nowNs;
             frameStepAccumulator += deltaTime;
 
@@ -286,7 +320,7 @@ class App extends JFrame {
 
         // Update Movement
 
-        int moving[] = { (movingRight ? 1 : 0) - (movingLeft ? 1 : 0), 0 };
+        int moving[] = { (inputs.movingRight ? 1 : 0) - (inputs.movingLeft ? 1 : 0), 0 };
         // Player Updates
         player.update(dt, moving);
 
@@ -349,28 +383,43 @@ class Animation {
     int[] spriteSize;
     BufferedImage[] frames;
     GameImage loader;
+    double frameDuration, timer = 0;
+    int currentFrame = 0;
 
-    public Animation(String path, int[] spriteSize, int[]canvasSize, int framesCount) {
+    public Animation(String path, int[] spriteSize, int[] canvasSize, int framesCount, int animFrequency) {
         this.framesCount = framesCount;
         this.canvasW = canvasSize[0];
         this.canvasH = canvasSize[1];
         this.spriteSize = spriteSize;
+        this.frameDuration = (1.0 / animFrequency);
         frames = loadAnimation(path);
     }
+
     public BufferedImage[] loadAnimation(String path) {
         BufferedImage spriteSheet = new GameImage().loadImage(path);
         BufferedImage[] bufferedImageArray = new BufferedImage[framesCount];
         int xOffset, yOffset;
         xOffset = (canvasW - spriteSize[0]) / 2;
         yOffset = (canvasH - spriteSize[1]) / 2;
-        for(int i = 0; i<framesCount; i++){
-            bufferedImageArray[i] = spriteSheet.getSubimage((i*canvasW)+ xOffset , 0 + 49, spriteSize[0], spriteSize[1]);
+        for (int i = 0; i < framesCount; i++) {
+            bufferedImageArray[i] = spriteSheet.getSubimage((i * canvasW) + xOffset, 0 + 48, spriteSize[0],
+                    spriteSize[1]);
         }
         return bufferedImageArray;
     }
 
-    public BufferedImage getCurrentFrame(){
-        return frames[0];
+    public BufferedImage getCurrentFrame(double dt) {
+        timer += dt;
+        if (timer >= this.frameDuration) {
+            currentFrame = (currentFrame + 1) % framesCount;
+            timer -= frameDuration;
+        }
+        return frames[currentFrame];
+    }
+
+    public void reset() {
+        timer = 0;
+        currentFrame = 0;
     }
 }
 
