@@ -65,7 +65,7 @@ class Player extends PhysicsEntity {
     Animation currentAnimation;
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
-    boolean isMoving;
+    boolean isMoving, facingRight;
     App game;
 
     public Player(App game, double x, double y, int w, int h) {
@@ -77,26 +77,31 @@ class Player extends PhysicsEntity {
         this.currentAnimation = game.playerIdle;
         this.isMoving = false;
         this.speedFactor = 1.0;
+        this.facingRight = true;
     }
 
     public void update(double dt, int[] moving) {
         prevX = xPos;
         prevY = yPos;
-        if(game.inputs.isSprinting){
-            speedFactor = 1.75;
-        } else{
-            speedFactor = 1;
-        }
-        xPos += velocityX * speedFactor * moving[0] * dt;
-        yPos += velocityY * moving[1] * dt;
 
-        if (moving[0] == 1 || moving[0] == -1) {
+        if (moving[0] == 1) {
             this.isMoving = true;
+            this.facingRight = true;
+        } else if (moving[0] == -1) {
+            this.isMoving = true;
+            this.facingRight = false;
         } else {
             this.isMoving = false;
         }
 
-        System.out.println(game.inputs.isSprinting + "," + isMoving);
+        if (game.inputs.isSprinting) {
+            speedFactor = 1.75;
+        } else {
+            speedFactor = 1;
+        }
+
+        xPos += velocityX * speedFactor * moving[0] * dt;
+        yPos += velocityY * moving[1] * dt;
         updateAnimation();
     }
 
@@ -135,9 +140,16 @@ class Player extends PhysicsEntity {
 
     public void render(Graphics g) {
         if (sprite != null) {
+            if (facingRight) {
+                g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
+                        w + renderOffset.w,
+                        h + renderOffset.h, null);
+            } else {
+                g.drawImage(sprite, ((int) alphaX) + renderOffset.x + w, ((int) alphaY) + renderOffset.y,
+                        -w - renderOffset.w,
+                        h + renderOffset.h, null);
+            }
 
-            g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y, w + renderOffset.w,
-                    h + renderOffset.h, null);
         } else {
             System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
@@ -268,7 +280,7 @@ class App extends JFrame {
         // player.sprite = playerIdle.getCurrentFrame(computedFrameDuration);
         playerWalk = new Animation("player/WALK.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 12, 10);
 
-        playerRun = new Animation("player/RUN.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 16, 14);
+        playerRun = new Animation("player/RUN.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 16, 16);
     }
 
     public void run(boolean running) {
