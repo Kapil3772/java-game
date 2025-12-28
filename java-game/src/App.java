@@ -58,7 +58,8 @@ enum PlayerAnimState {
 }
 
 class Player extends PhysicsEntity {
-    double[] velocity;
+    double speedFactor;
+    double velocityX, velocityY;
     BufferedImage sprite;
     RenderOffset renderOffset = new RenderOffset(0, 0, 0, 0);
     Animation currentAnimation;
@@ -69,19 +70,25 @@ class Player extends PhysicsEntity {
 
     public Player(App game, double x, double y, int w, int h) {
         super(x, y, w, h);
-        this.velocity = new double[] { 80, 0 };
+        this.velocityX = 80.0;
+        this.velocityY = 0;
         this.game = game;
         this.currAnimState = PlayerAnimState.IDLE;
         this.currentAnimation = game.playerIdle;
         this.isMoving = false;
+        this.speedFactor = 1.0;
     }
 
     public void update(double dt, int[] moving) {
         prevX = xPos;
         prevY = yPos;
-
-        xPos += velocity[0] * moving[0] * dt;
-        yPos += velocity[1] * moving[1] * dt;
+        if(game.inputs.isSprinting){
+            speedFactor = 1.75;
+        } else{
+            speedFactor = 1;
+        }
+        xPos += velocityX * speedFactor * moving[0] * dt;
+        yPos += velocityY * moving[1] * dt;
 
         if (moving[0] == 1 || moving[0] == -1) {
             this.isMoving = true;
@@ -89,12 +96,12 @@ class Player extends PhysicsEntity {
             this.isMoving = false;
         }
 
-        System.out.println(game.inputs.isRunning + "," + isMoving);
+        System.out.println(game.inputs.isSprinting + "," + isMoving);
         updateAnimation();
     }
 
     public void updateAnimation() {
-        if (isMoving && game.inputs.isRunning) {
+        if (isMoving && game.inputs.isSprinting) {
             this.nextAnimState = PlayerAnimState.RUN;
         } else if (isMoving) {
             this.nextAnimState = PlayerAnimState.WALK;
@@ -146,7 +153,7 @@ class InputState {
     boolean movingLeft = false; // a
     boolean movingUp = false; // w
     boolean movingDown = false; // s
-    boolean isRunning = false; // shift
+    boolean isSprinting = false; // shift
 }
 
 class App extends JFrame {
@@ -213,7 +220,7 @@ class App extends JFrame {
             switch (e.getKeyCode()) {
                 case KeyEvent.VK_A -> inputs.movingLeft = pressed;
                 case KeyEvent.VK_D -> inputs.movingRight = pressed;
-                case KeyEvent.VK_SHIFT -> inputs.isRunning = pressed;
+                case KeyEvent.VK_SHIFT -> inputs.isSprinting = pressed;
             }
             return false;
         });
@@ -241,7 +248,7 @@ class App extends JFrame {
             public void windowLostFocus(WindowEvent e) {
                 inputs.movingLeft = false;
                 inputs.movingRight = false;
-                inputs.isRunning = false;
+                inputs.isSprinting = false;
                 // jump = false;
             }
         });
@@ -261,7 +268,7 @@ class App extends JFrame {
         // player.sprite = playerIdle.getCurrentFrame(computedFrameDuration);
         playerWalk = new Animation("player/WALK.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 12, 10);
 
-        playerRun = new Animation("player/RUN.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 16, 10);
+        playerRun = new Animation("player/RUN.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 16, 14);
     }
 
     public void run(boolean running) {
