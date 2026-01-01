@@ -11,18 +11,22 @@ import java.io.File;
 import java.io.IOException;
 
 class Rect {
-    double x, y; // actual Pos after each update
-    double alphaX, alphaY; // allpha means interpolated pos
+    double xPos, yPos;
     int w, h;
-    double prevX, prevY; // previous Pos during recent update
 
     public Rect(double x, double y, int w, int h) {
-        this.x = x;
-        this.y = y;
+        this.xPos = x;
+        this.yPos = y;
         this.w = w;
         this.h = h;
-        this.alphaX = x;
-        this.alphaY = y;
+    }
+
+    public double getCenterX() {
+        return (this.xPos + this.w) / 2.0;
+    }
+
+    public double getCenterY() {
+        return (this.yPos + this.h) / 2.0;
     }
 }
 
@@ -38,14 +42,11 @@ class RenderOffset {
 }
 
 class PhysicsEntity {
-    double xPos, yPos, alphaX, alphaY, prevX, prevY;
-    int w, h; // in pixels
+    double prevX, prevY, alphaX, alphaY;
+    Rect rect; // in pixels
 
     public PhysicsEntity(double x, double y, int w, int h) {
-        this.xPos = x;
-        this.yPos = y;
-        this.w = w;
-        this.h = h;
+        this.rect = new Rect(x, y, w, h);
         this.alphaX = x;
         this.alphaY = y;
     }
@@ -62,6 +63,9 @@ class Player extends PhysicsEntity {
     double velocityX, velocityY;
     BufferedImage sprite;
     RenderOffset renderOffset = new RenderOffset(0, 0, 0, 0);
+    RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
+    double imageScalingFactor = 1.0;
+    int spriteW, spriteH;
     Animation currentAnimation;
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
@@ -78,11 +82,18 @@ class Player extends PhysicsEntity {
         this.isMoving = false;
         this.speedFactor = 1.0;
         this.facingRight = true;
+        this.spriteW = 48;
+        this.spriteH = 32;
+        this.imageScalingFactor = 1;
+        this.renderOffset.w = (int) (spriteW * imageScalingFactor / 2);
+        this.renderOffset.h = (int) (spriteH * imageScalingFactor / 2);
+        this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
+        this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
     }
 
     public void update(double dt, int[] moving) {
-        prevX = xPos;
-        prevY = yPos;
+        prevX = rect.xPos;
+        prevY = rect.yPos;
 
         if (moving[0] == 1) {
             this.isMoving = true;
@@ -95,23 +106,25 @@ class Player extends PhysicsEntity {
         }
 
         if (game.inputs.isSprinting) {
-            speedFactor = 1.75;
+            speedFactor = 2.15;
         } else {
             speedFactor = 1;
         }
 
-        xPos += velocityX * speedFactor * moving[0] * dt;
-        yPos += velocityY * moving[1] * dt;
-        updateAnimation();
+        rect.xPos += velocityX * speedFactor * moving[0] * dt;
+        rect.yPos += velocityY * moving[1] * dt;
     }
 
     public void updateAnimation() {
         if (isMoving && game.inputs.isSprinting) {
             this.nextAnimState = PlayerAnimState.RUN;
+            animRenderOffset.x = -10;
         } else if (isMoving) {
             this.nextAnimState = PlayerAnimState.WALK;
+            animRenderOffset.x = -4;
         } else {
             this.nextAnimState = PlayerAnimState.IDLE;
+            animRenderOffset.x = 0;
         }
         if (nextAnimState != currAnimState) {
             currAnimState = nextAnimState;
@@ -133,30 +146,44 @@ class Player extends PhysicsEntity {
         sprite = currentAnimation.getCurrentFrame(game.deltaTime);
     }
 
+    public void updateAnimationRenderOffset(){
+        this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2) + animRenderOffset.x;
+        this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h))) + animRenderOffset.y;
+    }
+
     public void updateInterpolation(double ipf) {
-        alphaX = prevX + (xPos - prevX) * ipf;
-        alphaY = prevY + (yPos - prevY) * ipf;
+        alphaX = prevX + (rect.xPos - prevX) * ipf;
+        alphaY = prevY + (rect.yPos - prevY) * ipf;
     }
 
     public void render(Graphics g) {
         if (sprite != null) {
             if (facingRight) {
                 g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
-                        w + renderOffset.w,
-                        h + renderOffset.h, null);
+                        spriteW + renderOffset.w,
+                        spriteH + renderOffset.h, null);
+
+                g.setColor(Color.BLUE);
+                g.drawRect(((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y, spriteW + renderOffset.w,
+                        spriteH + renderOffset.h);
             } else {
-                g.drawImage(sprite, ((int) alphaX) + renderOffset.x + w, ((int) alphaY) + renderOffset.y,
-                        -w - renderOffset.w,
-                        h + renderOffset.h, null);
+                g.drawImage(sprite, ((int) alphaX) - renderOffset.x + rect.w, ((int) alphaY) + renderOffset.y,
+                        -spriteW - renderOffset.w,
+                        spriteH + renderOffset.h, null);
+                g.setColor(Color.BLUE);
+                g.drawRect(((int) alphaX) - renderOffset.x + rect.w - renderOffset.w - spriteW,
+                        ((int) alphaY) + renderOffset.y,
+                        spriteW + renderOffset.w, spriteH + renderOffset.h);
             }
 
         } else {
             System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
-            g.fillRect((int) alphaX, (int) alphaY, w, h);
+            g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        g.setColor(Color.BLUE);
-        g.drawRect((int) alphaX, (int) alphaY, w, h);
+        g.setColor(Color.GREEN);
+        g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+
     }
 }
 
@@ -195,6 +222,7 @@ class App extends JFrame {
     int framescount = 1;
 
     InputState inputs = new InputState();
+    int []moving = {0, 0};
     JPanel panel;
 
     // Entities
@@ -206,7 +234,10 @@ class App extends JFrame {
         setTitle("Game");
         setSize(FRAME_WIDTH, FRAME_HEIGHT);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setVisible(true);
+        loadAll();
+
+        this.player = new Player(this, 50, 50, 20, 48);
+        
         // Add a custom drawing panel
         this.panel = new JPanel() {
             {
@@ -220,7 +251,9 @@ class App extends JFrame {
                 // Tiles, other render for future
 
                 // Player render
-                player.render(g);
+                if(player!=null){
+                    player.render(g);
+                }
             }
         };
         add(panel);
@@ -264,11 +297,10 @@ class App extends JFrame {
                 // jump = false;
             }
         });
+        
         assets = new Asset();
 
-        loadAll();
-
-        this.player = new Player(this, 10, 10, 64, 64);
+        setVisible(true);
 
         Thread gameThread = new Thread(() -> run(running));
         gameThread.start();
@@ -276,11 +308,11 @@ class App extends JFrame {
 
     public void loadAll() {
         // assets.load("playerIdle", "player/IDLE");
-        playerIdle = new Animation("player/IDLE.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 10, 10);
-        // player.sprite = playerIdle.getCurrentFrame(computedFrameDuration);
-        playerWalk = new Animation("player/WALK.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 12, 10);
+        playerIdle = new Animation("player/IDLE.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 10, 10);
 
-        playerRun = new Animation("player/RUN.png", new int[] { 32, 32 }, new int[] { 96, 96 }, 16, 16);
+        playerWalk = new Animation("player/WALK.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 12, 12);
+
+        playerRun = new Animation("player/RUN.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 16, 16);
     }
 
     public void run(boolean running) {
@@ -315,6 +347,7 @@ class App extends JFrame {
 
             interpolationFactor = frameStepAccumulator / UPDATE_STEP_DURATION;
             updateInterpolation(interpolationFactor);
+            updateAnimation();
 
             // Render
             render();
@@ -339,7 +372,8 @@ class App extends JFrame {
 
         // Update Movement
 
-        int moving[] = { (inputs.movingRight ? 1 : 0) - (inputs.movingLeft ? 1 : 0), 0 };
+        moving[0] = (inputs.movingRight ? 1 : 0) - (inputs.movingLeft ? 1 : 0);
+
         // Player Updates
         player.update(dt, moving);
 
@@ -356,7 +390,10 @@ class App extends JFrame {
         // interpolation for player
         player.updateInterpolation(ipf);
     }
-
+    public void updateAnimation(){
+        player.updateAnimationRenderOffset();
+        player.updateAnimation();
+    }
     public void lagSpike() {
         double x = 0;
         for (int i = 0; i < 20000000; i++) {
@@ -398,11 +435,12 @@ class GameImage {
 }
 
 class Animation {
-    int framesCount, canvasW, canvasH;
+    int framesCount;
+    int canvasW, canvasH; // pixels
     int[] spriteSize;
     BufferedImage[] frames;
     GameImage loader;
-    double frameDuration, timer = 0;
+    double frameDuration, animationTime = 0;
     int currentFrame = 0;
 
     public Animation(String path, int[] spriteSize, int[] canvasSize, int framesCount, int animFrequency) {
@@ -419,25 +457,22 @@ class Animation {
         BufferedImage[] bufferedImageArray = new BufferedImage[framesCount];
         int xOffset, yOffset;
         xOffset = (canvasW - spriteSize[0]) / 2;
-        yOffset = (canvasH - spriteSize[1]) / 2;
+        yOffset = (canvasH - 16 - spriteSize[1]);
         for (int i = 0; i < framesCount; i++) {
-            bufferedImageArray[i] = spriteSheet.getSubimage((i * canvasW) + xOffset, 0 + 48, spriteSize[0],
+            bufferedImageArray[i] = spriteSheet.getSubimage((i * canvasW) + xOffset, 0 + yOffset, spriteSize[0],
                     spriteSize[1]);
         }
         return bufferedImageArray;
     }
 
     public BufferedImage getCurrentFrame(double dt) {
-        timer += dt;
-        if (timer >= this.frameDuration) {
-            currentFrame = (currentFrame + 1) % framesCount;
-            timer -= frameDuration;
-        }
+        animationTime += dt;
+        currentFrame = (int)(animationTime / frameDuration) % framesCount;
         return frames[currentFrame];
     }
 
     public void reset() {
-        timer = 0;
+        animationTime = 0;
         currentFrame = 0;
     }
 }
