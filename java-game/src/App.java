@@ -237,7 +237,7 @@ class App extends JFrame {
         loadAll();
 
         this.player = new Player(this, 50, 50, 20, 48);
-        
+
         // Add a custom drawing panel
         this.panel = new JPanel() {
             {
@@ -402,7 +402,7 @@ class App extends JFrame {
     }
 
     public void render() {
-        panel.repaint();
+        SwingUtilities.invokeLater(() -> panel.repaint()); //forwards repaint to EDT instead of game thread
     }
 
     public static void main(String[] args) {
