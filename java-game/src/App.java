@@ -50,8 +50,11 @@ class Tilemap {
 
     public Tilemap() {
         tiles = new PhysicsRect[10];
-        for (int i = 0; i < 10; i++) {
-            tiles[i] = new PhysicsRect(10 + (i * 32), 100, 32, 32);
+        for (int i = 0; i < 5; i++) {
+            tiles[i] = new PhysicsRect(10 + (i * 32), 300, 32, 32);
+        }
+        for (int i = 0; i < 5; i++) {
+            tiles[5 + i] = new PhysicsRect(tiles[4].xPos, (300 - (i * 32)), 32, 32);
         }
     }
 
@@ -103,6 +106,7 @@ class Player extends PhysicsEntity {
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
     boolean isMoving, facingRight;
+    double gravitationalFactor;
     App game;
 
     public Player(App game, double x, double y, int w, int h) {
@@ -122,12 +126,10 @@ class Player extends PhysicsEntity {
         this.renderOffset.h = (int) (spriteH * imageScalingFactor / 2);
         this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
         this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
+        this.gravitationalFactor = 0.0;
     }
 
     public void update(double dt, int[] moving) {
-        prevX = rect.xPos;
-        prevY = rect.yPos;
-
         if (moving[0] == 1) {
             this.isMoving = true;
             this.facingRight = true;
@@ -145,13 +147,17 @@ class Player extends PhysicsEntity {
         }
 
         // moving in X direction
+        prevX = rect.xPos;
         rect.xPos += velocityX * speedFactor * moving[0] * dt;
 
         // resolving X collision
         resolveCollisionX();
 
         // moving in y direction
-        rect.yPos += velocityY * moving[1] * dt;
+        prevY = rect.yPos;
+        gravitationalFactor += game.ACCLN_GRAVITY;
+        gravitationalFactor = Math.min(gravitationalFactor, game.TERMINAL_GRAVITY);
+        rect.yPos += ((velocityY * moving[1]) + gravitationalFactor) * dt;
 
         // resolving y collision
         resolveCollisionY();
@@ -172,6 +178,7 @@ class Player extends PhysicsEntity {
             }
         }
     }
+
     public void resolveCollisionY() {
         for (PhysicsRect tile : game.tilemap.tiles) {
             if (this.rect.intersects(tile)) {
@@ -179,6 +186,7 @@ class Player extends PhysicsEntity {
                 // moving moving down
                 if (rect.yPos > prevY) {
                     rect.yPos = tile.yPos - rect.h;
+                    this.gravitationalFactor = 0.0;
                 }
                 // moving up
                 else if (rect.yPos < prevY) {
@@ -291,6 +299,9 @@ class App extends JFrame {
 
     private double frameStepAccumulator;
     private double interpolationFactor;
+
+    public final double TERMINAL_GRAVITY = 359.0; // px / second
+    public final double ACCLN_GRAVITY = TERMINAL_GRAVITY * UPDATE_STEP_DURATION; // px / second square
 
     // image variables
     private final GameImage loader = new GameImage();
