@@ -3,11 +3,18 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+
+//for json reader
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.GsonBuilder;
 
 //for image and file handels
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
-import java.io.File;
+
+import java.io.FileReader;
 import java.io.IOException;
 
 class Rect {
@@ -45,10 +52,52 @@ class PhysicsRect extends Rect {
     }
 }
 
-class Tilemap {
-    PhysicsRect[] tiles;
+class Tile {
+    int x,y,w,h;
+}
 
-    public Tilemap() {
+class OnGridTile extends PhysicsEntity {
+    String type;
+    int variant;
+    int  gridX, gridY;
+    public OnGridTile(double x, double y, int w, int h, int gridSize){
+        super(x,y,w,h);
+        gridX = (int)(x / gridSize); 
+        gridY = (int)(y / gridSize); 
+    }
+}
+
+
+class TileData {
+    String type;
+    int variant;
+    int gridX;
+    int gridY;
+}
+
+class MapData {
+    int tileSize;
+    List<TileData> tiles;
+}
+
+class Maploader {
+    public static MapData loadMap(String path) {
+        Gson gson = new Gson();
+        try (FileReader reader = new FileReader(path)) {
+            MapData map = gson.fromJson(reader, MapData.class);
+            return map;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+}
+
+class TileMap {
+    PhysicsRect[] tiles;
+    OnGridTile[] onGridTiles;
+
+    public TileMap() {
         tiles = new PhysicsRect[10];
         for (int i = 0; i < 5; i++) {
             tiles[i] = new PhysicsRect(10 + (i * 32), 300, 32, 32);
@@ -106,6 +155,7 @@ class Player extends PhysicsEntity {
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
     boolean isMoving, facingRight;
+    boolean onGround = false;
     double gravitationalFactor;
     App game;
 
@@ -164,7 +214,7 @@ class Player extends PhysicsEntity {
     }
 
     public void resolveCollisionX() {
-        for (PhysicsRect tile : game.tilemap.tiles) {
+        for (PhysicsRect tile : game.tileMap.tiles) {
             if (this.rect.intersects(tile)) {
 
                 // moving right
@@ -180,13 +230,14 @@ class Player extends PhysicsEntity {
     }
 
     public void resolveCollisionY() {
-        for (PhysicsRect tile : game.tilemap.tiles) {
+        for (PhysicsRect tile : game.tileMap.tiles) {
             if (this.rect.intersects(tile)) {
 
                 // moving moving down
                 if (rect.yPos > prevY) {
                     rect.yPos = tile.yPos - rect.h;
                     this.gravitationalFactor = 0.0;
+                    this.onGround = true;
                 }
                 // moving up
                 else if (rect.yPos < prevY) {
@@ -268,8 +319,8 @@ class Player extends PhysicsEntity {
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        g.setColor(Color.GREEN);
-        g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+        /*g.setColor(Color.GREEN);
+        g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);*/
 
     }
 }
@@ -300,7 +351,7 @@ class App extends JFrame {
     private double frameStepAccumulator;
     private double interpolationFactor;
 
-    public final double TERMINAL_GRAVITY = 359.0; // px / second
+    public final double TERMINAL_GRAVITY = 359.0 * 0; // px / second
     public final double ACCLN_GRAVITY = TERMINAL_GRAVITY * UPDATE_STEP_DURATION; // px / second square
 
     // image variables
@@ -320,8 +371,8 @@ class App extends JFrame {
     Asset assets;
     Animation playerIdle, playerWalk, playerRun;
 
-    // tilemap
-    Tilemap tilemap;
+    // tileMap
+    TileMap tileMap;
 
     public App() {
         setTitle("Game");
@@ -329,7 +380,16 @@ class App extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         loadAll();
 
-        tilemap = new Tilemap();
+        tileMap = new TileMap();
+
+        MapData map = Maploader.loadMap("map.json");
+
+        if(map!=null){
+            System.out.println("Tile size: "+ map.tileSize);
+            for (TileData tile : map.tiles) {
+            System.out.println(tile.type + " , " + tile.variant + " at  ( " + tile.gridX + ", " + tile.gridY + " )\n");
+            }
+        }
         // tiles
         // player
         this.player = new Player(this, 50, 50, 20, 48);
@@ -350,7 +410,7 @@ class App extends JFrame {
                 if (player != null) {
                     player.render(g);
                 }
-                tilemap.render(g);
+                tileMap.render(g);
             }
         };
         add(panel);
