@@ -53,44 +53,79 @@ class PhysicsRect extends Rect {
 }
 
 class OnGridTile extends PhysicsEntity {
-    String type;
-    int variant;
-    int  gridX, gridY;
-    public OnGridTile(double x, double y, int w, int h){
-        super(x,y,w,h);
+    final TileVariant tileVariant;
+    int gridX, gridY;
+
+    public OnGridTile(TileVariant tileVariant, double x, double y, int w, int h) {
+        super(x, y, w, h);
+        this.tileVariant = tileVariant;
+    }
+}
+
+class TileVariant {
+    final String type;
+    final int variant;
+    final BufferedImage image;
+
+    public TileVariant(String type, int variant, BufferedImage image) {
+        this.type = type;
+        this.variant = variant;
+        this.image = image;
+    }
+}
+
+class TileVariantRegistry {
+    private final Map<String, TileVariant> tileVariants = new HashMap<>();
+
+    private String key(String type, int variant) {
+        return type + ":" + variant;
+    }
+
+    public void register(String type, int variant, BufferedImage img) {
+        tileVariants.put(key(type, variant), new TileVariant(type, variant, img));
+    }
+
+    public TileVariant get(String type, int variant) {
+        return tileVariants.get(key(type, variant));
     }
 }
 
 class TileMap {
-    PhysicsRect[] tiles;
     OnGridTile[] onGridTiles;
     int tilesCount;
+    TileVariantRegistry registry;
 
-    public TileMap(MapData map) {
+    public TileMap(MapData map, TileVariantRegistry registry) {
+        this.registry = registry;
         loadMapData(map);
     }
 
     public void render(Graphics g) {
         g.setColor(Color.BLACK);
-        for (int i = 0; i < tilesCount; i++) {
-            g.drawRect((int) (onGridTiles[i].rect.xPos), (int) onGridTiles[i].rect.yPos, onGridTiles[i].rect.w, onGridTiles[i].rect.h);
+        for (OnGridTile tile : onGridTiles) {
+            if (tile != null) {
+                g.drawImage(tile.tileVariant.image, (int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h, null);
+            }
         }
     }
 
-    public void loadMapData(MapData map){
-        int count = 0, i=0;
-        if(map!=null){
-            for(TileData tile : map.tiles){
-                count++;
-            }
-            this.tilesCount = count;
-            onGridTiles = new OnGridTile[count];
-            for(TileData tile : map.tiles){
-                onGridTiles[i] = new OnGridTile(tile.gridX * map.tileSize, tile.gridY * map.tileSize, map.tileSize, map.tileSize);
-                i++;
-            }
-        }else {
+    public void loadMapData(MapData map) {
+        if (map == null)
             return;
+
+        tilesCount = map.tiles.size(); // Yesko meaning bujhnu xa
+        onGridTiles = new OnGridTile[tilesCount];
+
+        int i = 0;
+        for (TileData tile : map.tiles) {
+            TileVariant variant = registry.get(tile.type, tile.variant);
+            if (variant == null) {
+                throw new RuntimeException(
+                        "TileVariant not regestered: " + tile.type + " variant " + tile.variant);
+            }
+            onGridTiles[i++] = new OnGridTile(variant, tile.gridX * map.tileSize, tile.gridY * map.tileSize,
+                    map.tileSize, map.tileSize);
         }
     }
 }
@@ -120,8 +155,6 @@ class Maploader {
     }
 }
 
-
-
 class PhysicsEntity {
     double prevX, prevY, alphaX, alphaY;
     PhysicsRect rect; // in pixels
@@ -143,6 +176,7 @@ class RenderOffset {
         this.h = h;
     }
 }
+
 class InputState {
     boolean movingRight = false; // d
     boolean movingLeft = false; // a
@@ -156,6 +190,7 @@ enum PlayerAnimState {
     WALK,
     RUN
 }
+
 class Player extends PhysicsEntity {
     double speedFactor;
     double velocityX, velocityY;
@@ -332,13 +367,13 @@ class Player extends PhysicsEntity {
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        /*g.setColor(Color.GREEN);
-        g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);*/
+        /*
+         * g.setColor(Color.GREEN);
+         * g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+         */
 
     }
 }
-
-
 
 class App extends JFrame {
     // Class Constants
@@ -378,7 +413,8 @@ class App extends JFrame {
     Asset assets;
     Animation playerIdle, playerWalk, playerRun;
 
-    // tileMap
+    // tiles Variables
+    TileVariantRegistry tileVariantRegistry = new TileVariantRegistry();
     TileMap tileMap;
 
     public App() {
@@ -388,14 +424,8 @@ class App extends JFrame {
         loadAll();
 
         MapData map = Maploader.loadMap("map.json");
-        tileMap = new TileMap(map);
+        tileMap = new TileMap(map, tileVariantRegistry);
 
-        if(map!=null){
-            System.out.println("Tile size: "+ map.tileSize);
-            for (TileData tile : map.tiles) {
-            System.out.println(tile.type + " , " + tile.variant + " at  ( " + tile.gridX + ", " + tile.gridY + " )\n");
-            }
-        }
         // tiles
         // player
         this.player = new Player(this, 50, 50, 20, 48);
@@ -411,12 +441,13 @@ class App extends JFrame {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g); // clear paper
                 // Tiles, other render for future
+                tileMap.render(g);
 
                 // Player render
                 if (player != null) {
                     player.render(g);
                 }
-                tileMap.render(g);
+
             }
         };
         add(panel);
@@ -459,6 +490,8 @@ class App extends JFrame {
                 inputs.movingLeft = false;
                 inputs.movingRight = false;
                 inputs.isSprinting = false;
+                inputs.movingDown = false;
+                inputs.movingUp = false;
                 // jump = false;
             }
         });
@@ -472,13 +505,16 @@ class App extends JFrame {
     }
 
     public void loadAll() {
+        // loading tiles variants
+        tileVariantRegistry.register("ground", 0, loader.loadImage("tiles/ground/0.png"));
+        tileVariantRegistry.register("stone", 0, loader.loadImage("tiles/stone/0.png"));
+
         // assets.load("playerIdle", "player/IDLE");
         playerIdle = new Animation("player/IDLE.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 10, 10);
 
         playerWalk = new Animation("player/WALK.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 12, 12);
 
         playerRun = new Animation("player/RUN.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 16, 16);
-
 
     }
 
@@ -598,7 +634,7 @@ class GameImage {
     public BufferedImage[] loadImages(String folderPath, int n) {
         BufferedImage[] images = new BufferedImage[n];
         for (int i = 0; i < n; i++) {
-            images[i] = loadImage(folderPath + "/" + i + ".png");
+            images[i] = loadImage(folderPath + "/" + (int) (i + 1) + ".png");
         }
         return images;
     }
@@ -612,14 +648,16 @@ class Animation {
     GameImage loader;
     double frameDuration, animationTime = 0;
     int currentFrame = 0;
-    //For loadin animation from a group of sprites
+
+    // For loadin animation from a group of sprites
     public Animation(String path, int framesCount, int animFrequency) {
         this.framesCount = framesCount;
         this.frameDuration = (1.0 / animFrequency);
         this.loader = new GameImage();
         this.frames = loadAnimationFromManySprite(path, framesCount);
     }
-    //for loading animation from a single sprite sheet
+
+    // for loading animation from a single sprite sheet
     public Animation(String path, int[] spriteSize, int[] canvasSize, int framesCount, int animFrequency) {
         this.framesCount = framesCount;
         this.canvasW = canvasSize[0];
@@ -643,7 +681,7 @@ class Animation {
         return bufferedImageArray;
     }
 
-    public BufferedImage[] loadAnimationFromManySprite(String path , int imgCount) {
+    public BufferedImage[] loadAnimationFromManySprite(String path, int imgCount) {
         BufferedImage[] imgs = null;
         imgs = loader.loadImages(path, imgCount);
         return imgs;
