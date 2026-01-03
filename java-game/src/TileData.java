@@ -52,21 +52,48 @@ class PhysicsRect extends Rect {
     }
 }
 
-class Tile {
-    int x,y,w,h;
-}
-
 class OnGridTile extends PhysicsEntity {
     String type;
     int variant;
     int  gridX, gridY;
-    public OnGridTile(double x, double y, int w, int h, int gridSize){
+    public OnGridTile(double x, double y, int w, int h){
         super(x,y,w,h);
-        gridX = (int)(x / gridSize); 
-        gridY = (int)(y / gridSize); 
     }
 }
 
+class TileMap {
+    PhysicsRect[] tiles;
+    OnGridTile[] onGridTiles;
+    int tilesCount;
+
+    public TileMap(MapData map) {
+        loadMapData(map);
+    }
+
+    public void render(Graphics g) {
+        g.setColor(Color.BLACK);
+        for (int i = 0; i < tilesCount; i++) {
+            g.drawRect((int) (onGridTiles[i].rect.xPos), (int) onGridTiles[i].rect.yPos, onGridTiles[i].rect.w, onGridTiles[i].rect.h);
+        }
+    }
+
+    public void loadMapData(MapData map){
+        int count = 0, i=0;
+        if(map!=null){
+            for(TileData tile : map.tiles){
+                count++;
+            }
+            this.tilesCount = count;
+            onGridTiles = new OnGridTile[count];
+            for(TileData tile : map.tiles){
+                onGridTiles[i] = new OnGridTile(tile.gridX * map.tileSize, tile.gridY * map.tileSize, map.tileSize, map.tileSize);
+                i++;
+            }
+        }else {
+            return;
+        }
+    }
+}
 
 class TileData {
     String type;
@@ -93,25 +120,16 @@ class Maploader {
     }
 }
 
-class TileMap {
-    PhysicsRect[] tiles;
-    OnGridTile[] onGridTiles;
 
-    public TileMap() {
-        tiles = new PhysicsRect[10];
-        for (int i = 0; i < 5; i++) {
-            tiles[i] = new PhysicsRect(10 + (i * 32), 300, 32, 32);
-        }
-        for (int i = 0; i < 5; i++) {
-            tiles[5 + i] = new PhysicsRect(tiles[4].xPos, (300 - (i * 32)), 32, 32);
-        }
-    }
 
-    public void render(Graphics g) {
-        g.setColor(Color.BLACK);
-        for (int i = 0; i < 10; i++) {
-            g.drawRect((int) tiles[i].xPos, (int) tiles[i].yPos, tiles[i].w, tiles[i].h);
-        }
+class PhysicsEntity {
+    double prevX, prevY, alphaX, alphaY;
+    PhysicsRect rect; // in pixels
+
+    public PhysicsEntity(double x, double y, int w, int h) {
+        this.rect = new PhysicsRect(x, y, w, h);
+        this.alphaX = x;
+        this.alphaY = y;
     }
 }
 
@@ -125,16 +143,12 @@ class RenderOffset {
         this.h = h;
     }
 }
-
-class PhysicsEntity {
-    double prevX, prevY, alphaX, alphaY;
-    PhysicsRect rect; // in pixels
-
-    public PhysicsEntity(double x, double y, int w, int h) {
-        this.rect = new PhysicsRect(x, y, w, h);
-        this.alphaX = x;
-        this.alphaY = y;
-    }
+class InputState {
+    boolean movingRight = false; // d
+    boolean movingLeft = false; // a
+    boolean movingUp = false; // w
+    boolean movingDown = false; // s
+    boolean isSprinting = false; // shift
 }
 
 enum PlayerAnimState {
@@ -142,7 +156,6 @@ enum PlayerAnimState {
     WALK,
     RUN
 }
-
 class Player extends PhysicsEntity {
     double speedFactor;
     double velocityX, velocityY;
@@ -214,34 +227,34 @@ class Player extends PhysicsEntity {
     }
 
     public void resolveCollisionX() {
-        for (PhysicsRect tile : game.tileMap.tiles) {
-            if (this.rect.intersects(tile)) {
+        for (OnGridTile tile : game.tileMap.onGridTiles) {
+            if (this.rect.intersects(tile.rect)) {
 
                 // moving right
                 if (rect.xPos > prevX) {
-                    rect.xPos = tile.xPos - rect.w;
+                    rect.xPos = tile.rect.xPos - rect.w;
                 }
                 // moving left
                 else if (rect.xPos < prevX) {
-                    rect.xPos = tile.xPos + tile.w;
+                    rect.xPos = tile.rect.xPos + tile.rect.w;
                 }
             }
         }
     }
 
     public void resolveCollisionY() {
-        for (PhysicsRect tile : game.tileMap.tiles) {
-            if (this.rect.intersects(tile)) {
+        for (OnGridTile tile : game.tileMap.onGridTiles) {
+            if (this.rect.intersects(tile.rect)) {
 
                 // moving moving down
                 if (rect.yPos > prevY) {
-                    rect.yPos = tile.yPos - rect.h;
+                    rect.yPos = tile.rect.yPos - rect.h;
                     this.gravitationalFactor = 0.0;
                     this.onGround = true;
                 }
                 // moving up
                 else if (rect.yPos < prevY) {
-                    rect.yPos = tile.yPos + tile.h;
+                    rect.yPos = tile.rect.yPos + tile.rect.h;
                 }
             }
         }
@@ -325,13 +338,7 @@ class Player extends PhysicsEntity {
     }
 }
 
-class InputState {
-    boolean movingRight = false; // d
-    boolean movingLeft = false; // a
-    boolean movingUp = false; // w
-    boolean movingDown = false; // s
-    boolean isSprinting = false; // shift
-}
+
 
 class App extends JFrame {
     // Class Constants
@@ -380,9 +387,8 @@ class App extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         loadAll();
 
-        tileMap = new TileMap();
-
         MapData map = Maploader.loadMap("map.json");
+        tileMap = new TileMap(map);
 
         if(map!=null){
             System.out.println("Tile size: "+ map.tileSize);
@@ -472,6 +478,8 @@ class App extends JFrame {
         playerWalk = new Animation("player/WALK.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 12, 12);
 
         playerRun = new Animation("player/RUN.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 16, 16);
+
+
     }
 
     public void run(boolean running) {
@@ -604,17 +612,25 @@ class Animation {
     GameImage loader;
     double frameDuration, animationTime = 0;
     int currentFrame = 0;
-
+    //For loadin animation from a group of sprites
+    public Animation(String path, int framesCount, int animFrequency) {
+        this.framesCount = framesCount;
+        this.frameDuration = (1.0 / animFrequency);
+        this.loader = new GameImage();
+        this.frames = loadAnimationFromManySprite(path, framesCount);
+    }
+    //for loading animation from a single sprite sheet
     public Animation(String path, int[] spriteSize, int[] canvasSize, int framesCount, int animFrequency) {
         this.framesCount = framesCount;
         this.canvasW = canvasSize[0];
         this.canvasH = canvasSize[1];
         this.spriteSize = spriteSize;
         this.frameDuration = (1.0 / animFrequency);
-        frames = loadAnimation(path);
+        frames = loadAnimationFromSingleSprite(path);
+        this.loader = new GameImage();
     }
 
-    public BufferedImage[] loadAnimation(String path) {
+    public BufferedImage[] loadAnimationFromSingleSprite(String path) {
         BufferedImage spriteSheet = new GameImage().loadImage(path);
         BufferedImage[] bufferedImageArray = new BufferedImage[framesCount];
         int xOffset, yOffset;
@@ -625,6 +641,12 @@ class Animation {
                     spriteSize[1]);
         }
         return bufferedImageArray;
+    }
+
+    public BufferedImage[] loadAnimationFromManySprite(String path , int imgCount) {
+        BufferedImage[] imgs = null;
+        imgs = loader.loadImages(path, imgCount);
+        return imgs;
     }
 
     public BufferedImage getCurrentFrame(double dt) {
@@ -641,9 +663,9 @@ class Animation {
 
 class Asset {
     GameImage assetLoader = new GameImage();
-    Map<String, BufferedImage> animations = new HashMap<>();
+    Map<String, Animation> animations = new HashMap<>();
 
-    public void load(String animName, String path) {
-        animations.put(animName, assetLoader.loadImage(path + ".png"));
+    public void loadAnimationSprite(String animName, String path) {
+        animations.put(animName, new Animation(path, null, null, 0, 0));
     }
 }
