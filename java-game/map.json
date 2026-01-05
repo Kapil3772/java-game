@@ -1,17 +1,17 @@
 {
   "tileSize": 32,
   "tiles": [
-    {"type": "ground", "variant": 0, "gridX": 0, "gridY": 4},
-    {"type": "ground", "variant": 0, "gridX": 1, "gridY": 4},
-    {"type": "ground", "variant": 0, "gridX": 2, "gridY": 4},
-    {"type": "ground", "variant": 0, "gridX": 3, "gridY": 4},
-    {"type": "ground", "variant": 0, "gridX": 4, "gridY": 4},
-    {"type": "ground", "variant": 0, "gridX": 5, "gridY": 4},
-    {"type": "ground", "variant": 0, "gridX": 6, "gridY": 4},
+    {"type": "ground", "variant": 0, "gridX": 0, "gridY": 7},
+    {"type": "ground", "variant": 0, "gridX": 1, "gridY": 7},
+    {"type": "ground", "variant": 0, "gridX": 2, "gridY": 7},
+    {"type": "ground", "variant": 0, "gridX": 3, "gridY": 7},
+    {"type": "ground", "variant": 0, "gridX": 4, "gridY": 7},
+    {"type": "ground", "variant": 0, "gridX": 5, "gridY": 7},
+    {"type": "ground", "variant": 0, "gridX": 6, "gridY": 7},
 
-    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 3},
-    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 2},
-    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 1},
-    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 0}
+    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 6},
+    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 5},
+    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 4},
+    {"type": "stone", "variant": 0, "gridX": 5, "gridY": 3}
   ]
 }

@@ -110,22 +110,22 @@ class TileMap {
         }
     }
 
-    public void loadMapData(MapData map) {
-        if (map == null)
+    public void loadMapData(MapData mapData) {
+        if (mapData == null)
             return;
 
-        tilesCount = map.tiles.size(); // Yesko meaning bujhnu xa
+        tilesCount = mapData.tiles.size(); // Yesko meaning bujhnu xa
         onGridTiles = new OnGridTile[tilesCount];
 
         int i = 0;
-        for (TileData tile : map.tiles) {
+        for (TileData tile : mapData.tiles) {
             TileVariant variant = registry.get(tile.type, tile.variant);
             if (variant == null) {
                 throw new RuntimeException(
                         "TileVariant not regestered: " + tile.type + " variant " + tile.variant);
             }
-            onGridTiles[i++] = new OnGridTile(variant, tile.gridX * map.tileSize, tile.gridY * map.tileSize,
-                    map.tileSize, map.tileSize);
+            onGridTiles[i++] = new OnGridTile(variant, tile.gridX * mapData.tileSize, tile.gridY * mapData.tileSize,
+                    mapData.tileSize, mapData.tileSize);
         }
     }
 }
@@ -183,6 +183,8 @@ class InputState {
     boolean movingUp = false; // w
     boolean movingDown = false; // s
     boolean isSprinting = false; // shift
+    boolean jumpPressed = false; // w
+    boolean jumpHandeled = false;
 }
 
 enum PlayerAnimState {
@@ -192,6 +194,10 @@ enum PlayerAnimState {
 }
 
 class Player extends PhysicsEntity {
+    // constants
+    private double MASS = 10;
+    
+
     double speedFactor;
     double velocityX, velocityY;
     BufferedImage sprite;
@@ -199,18 +205,28 @@ class Player extends PhysicsEntity {
     RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
     double imageScalingFactor = 1.0;
     int spriteW, spriteH;
+
+    // Player Animation States
     Animation currentAnimation;
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
+
+    // Player states
+    boolean isJumping = false;
     boolean isMoving, facingRight;
     boolean onGround = false;
     double gravitationalFactor;
+    int jumps = 2;
     App game;
+
+    //Temporary test variables
+    int counter = 0;
+    double dy = 0, dyAccumulator = 0;
 
     public Player(App game, double x, double y, int w, int h) {
         super(x, y, w, h);
         this.velocityX = 80.0;
-        this.velocityY = 80.0;
+        this.velocityY = 0.0;
         this.game = game;
         this.currAnimState = PlayerAnimState.IDLE;
         this.currentAnimation = game.playerIdle;
@@ -227,6 +243,14 @@ class Player extends PhysicsEntity {
         this.gravitationalFactor = 0.0;
     }
 
+    public void jump() {
+        this.jumps = Math.max(0, jumps - 1);
+        this.onGround = false;
+        this.isJumping = true;
+        this.velocityY = -250;
+        this.gravitationalFactor = 0;
+    }
+
     public void update(double dt, int[] moving) {
         if (moving[0] == 1) {
             this.isMoving = true;
@@ -236,6 +260,11 @@ class Player extends PhysicsEntity {
             this.facingRight = false;
         } else {
             this.isMoving = false;
+        }
+
+        if (game.inputs.jumpPressed && !game.inputs.jumpHandeled && jumps < 10) {
+            game.inputs.jumpHandeled = true;
+            jump();
         }
 
         if (game.inputs.isSprinting) {
@@ -251,14 +280,27 @@ class Player extends PhysicsEntity {
         // resolving X collision
         resolveCollisionX();
 
-        // moving in y direction
+        // moving in y direction--
+        // (velocityY * moving[1]) needs to be added to move up and down
         prevY = rect.yPos;
-        gravitationalFactor += game.ACCLN_GRAVITY;
-        gravitationalFactor = Math.min(gravitationalFactor, game.TERMINAL_GRAVITY);
-        rect.yPos += ((velocityY * moving[1]) + gravitationalFactor) * dt;
+        //calculating displacement using initial velocity of the frame
+        dy = velocityY * dt / 2; 
+        rect.yPos += dy;
+        dyAccumulator += dy;
+        resolveCollisionY();
+
+        //calculating displacement using final velocity of the frame
+        velocityY += this.game.ACCLN_DUE_TO_GRAVITY * dt;
+        dy = velocityY * dt / 2;
+        rect.yPos += dy;
+        dyAccumulator += dy;
 
         // resolving y collision
         resolveCollisionY();
+
+        // Ressetting
+        //velocityY = Math.min(0, velocityY + this.gravitationalFactor);
+        
     }
 
     public void resolveCollisionX() {
@@ -281,15 +323,18 @@ class Player extends PhysicsEntity {
         for (OnGridTile tile : game.tileMap.onGridTiles) {
             if (this.rect.intersects(tile.rect)) {
 
-                // moving moving down
+                // moving down in a tile
                 if (rect.yPos > prevY) {
                     rect.yPos = tile.rect.yPos - rect.h;
                     this.gravitationalFactor = 0.0;
                     this.onGround = true;
+                    this.velocityY = 0;
+                    this.jumps = 2;
                 }
-                // moving up
+                // moving up in a tile
                 else if (rect.yPos < prevY) {
                     rect.yPos = tile.rect.yPos + tile.rect.h;
+                    this.velocityY = 0;
                 }
             }
         }
@@ -367,10 +412,8 @@ class Player extends PhysicsEntity {
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        /*
-         * g.setColor(Color.GREEN);
-         * g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);
-         */
+        g.setColor(Color.GREEN);
+        g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);
 
     }
 }
@@ -393,8 +436,7 @@ class App extends JFrame {
     private double frameStepAccumulator;
     private double interpolationFactor;
 
-    public final double TERMINAL_GRAVITY = 359.0 * 0; // px / second
-    public final double ACCLN_GRAVITY = TERMINAL_GRAVITY * UPDATE_STEP_DURATION; // px / second square
+    public final double ACCLN_DUE_TO_GRAVITY = 300; // px / second square
 
     // image variables
     private final GameImage loader = new GameImage();
@@ -428,7 +470,7 @@ class App extends JFrame {
 
         // tiles
         // player
-        this.player = new Player(this, 50, 50, 20, 48);
+        this.player = new Player(this, 300, 50, 30, 42);
 
         // Add a custom drawing panel
         this.panel = new JPanel() {
@@ -460,7 +502,13 @@ class App extends JFrame {
                 case KeyEvent.VK_A -> inputs.movingLeft = pressed;
                 case KeyEvent.VK_D -> inputs.movingRight = pressed;
                 case KeyEvent.VK_SHIFT -> inputs.isSprinting = pressed;
-                case KeyEvent.VK_W -> inputs.movingUp = pressed;
+                case KeyEvent.VK_W -> {
+                    inputs.jumpPressed = pressed;
+                    if (pressed) {
+                    } else { // w is released
+                        inputs.jumpHandeled = false;
+                    }
+                }
                 case KeyEvent.VK_S -> inputs.movingDown = pressed;
             }
             return false;
@@ -492,6 +540,7 @@ class App extends JFrame {
                 inputs.isSprinting = false;
                 inputs.movingDown = false;
                 inputs.movingUp = false;
+                inputs.jumpPressed = false;
                 // jump = false;
             }
         });
@@ -704,6 +753,5 @@ class Asset {
     Map<String, Animation> animations = new HashMap<>();
 
     public void loadAnimationSprite(String animName, String path) {
-        animations.put(animName, new Animation(path, null, null, 0, 0));
     }
 }
