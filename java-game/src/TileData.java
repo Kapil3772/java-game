@@ -195,8 +195,6 @@ enum PlayerAnimState {
 
 class Player extends PhysicsEntity {
     // constants
-    private double MASS = 10;
-    
 
     double speedFactor;
     double velocityX, velocityY;
@@ -215,11 +213,12 @@ class Player extends PhysicsEntity {
     boolean isJumping = false;
     boolean isMoving, facingRight;
     boolean onGround = false;
-    double gravitationalFactor;
+    double gravityFactor;
     int jumps = 2;
+    int airTime = 0;
     App game;
 
-    //Temporary test variables
+    // Temporary test variables
     int counter = 0;
     double dy = 0, dyAccumulator = 0;
 
@@ -240,7 +239,7 @@ class Player extends PhysicsEntity {
         this.renderOffset.h = (int) (spriteH * imageScalingFactor / 2);
         this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
         this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
-        this.gravitationalFactor = 0.0;
+        this.gravityFactor = 1;
     }
 
     public void jump() {
@@ -248,7 +247,6 @@ class Player extends PhysicsEntity {
         this.onGround = false;
         this.isJumping = true;
         this.velocityY = -250;
-        this.gravitationalFactor = 0;
     }
 
     public void update(double dt, int[] moving) {
@@ -283,14 +281,16 @@ class Player extends PhysicsEntity {
         // moving in y direction--
         // (velocityY * moving[1]) needs to be added to move up and down
         prevY = rect.yPos;
-        //calculating displacement using initial velocity of the frame
-        dy = velocityY * dt / 2; 
+        
+        // calculating displacement using initial velocity of the frame
+        dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
         resolveCollisionY();
 
-        //calculating displacement using final velocity of the frame
-        velocityY += this.game.ACCLN_DUE_TO_GRAVITY * dt;
+        prevY = rect.yPos;
+        // calculating displacement using final velocity of the frame
+        velocityY += this.game.ACCLN_DUE_TO_GRAVITY * gravityFactor * dt;
         dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
@@ -299,8 +299,14 @@ class Player extends PhysicsEntity {
         resolveCollisionY();
 
         // Ressetting
-        //velocityY = Math.min(0, velocityY + this.gravitationalFactor);
-        
+        if(!onGround) {
+            airTime++;
+        }else{
+            airTime = 0;
+        }
+
+        onGround = false;
+        System.out.println("AirTime: " + airTime);
     }
 
     public void resolveCollisionX() {
@@ -320,24 +326,24 @@ class Player extends PhysicsEntity {
     }
 
     public void resolveCollisionY() {
+        boolean groundedThisStep = false;
         for (OnGridTile tile : game.tileMap.onGridTiles) {
             if (this.rect.intersects(tile.rect)) {
-
                 // moving down in a tile
-                if (rect.yPos > prevY) {
+                if (velocityY > 0) {
                     rect.yPos = tile.rect.yPos - rect.h;
-                    this.gravitationalFactor = 0.0;
-                    this.onGround = true;
+                    groundedThisStep = true;
                     this.velocityY = 0;
                     this.jumps = 2;
                 }
                 // moving up in a tile
-                else if (rect.yPos < prevY) {
+                else if (velocityY < 0) {
                     rect.yPos = tile.rect.yPos + tile.rect.h;
                     this.velocityY = 0;
                 }
             }
         }
+        onGround = groundedThisStep;
     }
 
     public void updateAnimation() {
@@ -382,7 +388,7 @@ class Player extends PhysicsEntity {
     }
 
     public void render(Graphics g) {
-        if (sprite != null) {
+        if (sprite == null) {
             if (facingRight) {
                 g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
                         spriteW + renderOffset.w,
@@ -408,7 +414,7 @@ class Player extends PhysicsEntity {
             }
 
         } else {
-            System.out.println("Sprite is null " + currAnimState);
+            //System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
@@ -436,7 +442,7 @@ class App extends JFrame {
     private double frameStepAccumulator;
     private double interpolationFactor;
 
-    public final double ACCLN_DUE_TO_GRAVITY = 300; // px / second square
+    public final double ACCLN_DUE_TO_GRAVITY = 600; // px / second square
 
     // image variables
     private final GameImage loader = new GameImage();
