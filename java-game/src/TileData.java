@@ -214,6 +214,7 @@ class Player extends PhysicsEntity {
     boolean isMoving, facingRight;
     boolean onGround = false;
     double gravityFactor;
+    double terminalVelocity;
     int jumps = 2;
     int airTime = 0;
     App game;
@@ -240,6 +241,7 @@ class Player extends PhysicsEntity {
         this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
         this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
         this.gravityFactor = 1;
+        this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor; 
     }
 
     public void jump() {
@@ -290,7 +292,7 @@ class Player extends PhysicsEntity {
 
         prevY = rect.yPos;
         // calculating displacement using final velocity of the frame
-        velocityY += this.game.ACCLN_DUE_TO_GRAVITY * gravityFactor * dt;
+        velocityY = Math.min(velocityY + (this.game.ACCLN_DUE_TO_GRAVITY * gravityFactor * dt), terminalVelocity);
         dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
@@ -306,7 +308,6 @@ class Player extends PhysicsEntity {
         }
 
         onGround = false;
-        System.out.println("AirTime: " + airTime);
     }
 
     public void resolveCollisionX() {
@@ -388,7 +389,7 @@ class Player extends PhysicsEntity {
     }
 
     public void render(Graphics g) {
-        if (sprite == null) {
+        if (sprite != null) {
             if (facingRight) {
                 g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
                         spriteW + renderOffset.w,
@@ -443,6 +444,7 @@ class App extends JFrame {
     private double interpolationFactor;
 
     public final double ACCLN_DUE_TO_GRAVITY = 600; // px / second square
+    public final double TERMINAL_VELOCITY = 600;
 
     // image variables
     private final GameImage loader = new GameImage();
