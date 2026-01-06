@@ -473,7 +473,7 @@ class App extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         loadAll();
 
-        MapData map = Maploader.loadMap("map.json");
+        MapData map = Maploader.loadMap("map1.json");
         tileMap = new TileMap(map, tileVariantRegistry);
 
         // tiles
@@ -565,6 +565,22 @@ class App extends JFrame {
         // loading tiles variants
         tileVariantRegistry.register("ground", 0, loader.loadImage("tiles/ground/0.png"));
         tileVariantRegistry.register("stone", 0, loader.loadImage("tiles/stone/0.png"));
+        tileVariantRegistry.register("grass", 24, loader.loadImage("tiles/grass/24.png"));
+        tileVariantRegistry.register("grass", 25, loader.loadImage("tiles/grass/25.png"));
+        tileVariantRegistry.register("grass", 20, loader.loadImage("tiles/grass/20.png"));
+        tileVariantRegistry.register("grass", 21, loader.loadImage("tiles/grass/21.png"));
+        tileVariantRegistry.register("grass", 1, loader.loadImage("tiles/grass/1.png"));
+        tileVariantRegistry.register("grass", 2, loader.loadImage("tiles/grass/2.png"));
+        tileVariantRegistry.register("grass", 3, loader.loadImage("tiles/grass/3.png"));
+        tileVariantRegistry.register("grass", 4, loader.loadImage("tiles/grass/4.png"));
+        tileVariantRegistry.register("grass", 5, loader.loadImage("tiles/grass/5.png"));
+        tileVariantRegistry.register("grass", 6, loader.loadImage("tiles/grass/6.png"));
+        tileVariantRegistry.register("grass", 9, loader.loadImage("tiles/grass/9.png"));
+        tileVariantRegistry.register("grass", 10, loader.loadImage("tiles/grass/10.png"));
+        tileVariantRegistry.register("grass", 22, loader.loadImage("tiles/grass/22.png"));
+        tileVariantRegistry.register("grass", 39, loader.loadImage("tiles/grass/39.png"));
+        tileVariantRegistry.register("grass", 13, loader.loadImage("tiles/grass/13.png"));
+
 
         // assets.load("playerIdle", "player/IDLE");
         playerIdle = new Animation("player/IDLE.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 10, 10);
