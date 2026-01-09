@@ -211,9 +211,10 @@ class Player extends PhysicsEntity {
 
     // Player states
     boolean isJumping = false;
-    boolean isMoving, facingRight;
+    boolean isMoving, facingRight, isFalling;
     boolean onGround = false;
     double gravityFactor;
+    double fallFactor;
     double terminalVelocity;
     int jumps = 2;
     int airTime = 0;
@@ -241,7 +242,7 @@ class Player extends PhysicsEntity {
         this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
         this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
         this.gravityFactor = 1;
-        this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor; 
+        this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor;
     }
 
     public void jump() {
@@ -273,6 +274,9 @@ class Player extends PhysicsEntity {
             speedFactor = 1;
         }
 
+        isFalling = velocityY > 0;
+        fallFactor = isFalling ? 1.9 : 1.0;
+
         // moving in X direction
         prevX = rect.xPos;
         rect.xPos += velocityX * speedFactor * moving[0] * dt;
@@ -283,16 +287,19 @@ class Player extends PhysicsEntity {
         // moving in y direction--
         // (velocityY * moving[1]) needs to be added to move up and down
         prevY = rect.yPos;
-        
+
         // calculating displacement using initial velocity of the frame
         dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
         resolveCollisionY();
 
+        onGround = false;
+
         prevY = rect.yPos;
         // calculating displacement using final velocity of the frame
-        velocityY = Math.min(velocityY + (this.game.ACCLN_DUE_TO_GRAVITY * gravityFactor * dt), terminalVelocity);
+        velocityY = Math.min(velocityY + (this.game.ACCLN_DUE_TO_GRAVITY * fallFactor * gravityFactor * dt),
+                terminalVelocity);
         dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
@@ -301,13 +308,11 @@ class Player extends PhysicsEntity {
         resolveCollisionY();
 
         // Ressetting
-        if(!onGround) {
+        if (!onGround) {
             airTime++;
-        }else{
+        } else {
             airTime = 0;
         }
-
-        onGround = false;
     }
 
     public void resolveCollisionX() {
@@ -415,7 +420,7 @@ class Player extends PhysicsEntity {
             }
 
         } else {
-            //System.out.println("Sprite is null " + currAnimState);
+            // System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
@@ -580,7 +585,6 @@ class App extends JFrame {
         tileVariantRegistry.register("grass", 22, loader.loadImage("tiles/grass/22.png"));
         tileVariantRegistry.register("grass", 39, loader.loadImage("tiles/grass/39.png"));
         tileVariantRegistry.register("grass", 13, loader.loadImage("tiles/grass/13.png"));
-
 
         // assets.load("playerIdle", "player/IDLE");
         playerIdle = new Animation("player/IDLE.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 10, 10);
