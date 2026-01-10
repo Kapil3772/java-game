@@ -539,6 +539,15 @@ class App extends JFrame {
                 if (player != null) {
                     player.render(g);
                 }
+                Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
+                g.setFont(font);
+                // Set color (optional)
+                g.setColor(Color.BLACK);
+                // Draw the string
+                g.drawString("Actual Location in the memory ->", (int)(player.alphaX) - 340,(int)(player.alphaY + 40));
+
+                g.drawString("Rendered using Camera Offset -> ", FRAME_WIDTH/2 - 340, FRAME_HEIGHT/2);
+
 
             }
         };
@@ -602,14 +611,15 @@ class App extends JFrame {
         Thread gameThread = new Thread(() -> run(running));
         gameThread.start();
     }
-    public void loadTileAssets(){
-        //Misellaneous tiles
+
+    public void loadTileAssets() {
+        // Misellaneous tiles
         tileVariantRegistry.register("ground", 0, loader.loadImage("tiles/ground/0.png"));
         tileVariantRegistry.register("stone", 0, loader.loadImage("tiles/stone/0.png"));
 
-        //Grass Tiles
-        for(int i = 1; i<=41; i++){
-            tileVariantRegistry.register("grass", i, loader.loadImage("tiles/grass/"+i+".png"));
+        // Grass Tiles
+        for (int i = 1; i <= 41; i++) {
+            tileVariantRegistry.register("grass", i, loader.loadImage("tiles/grass/" + i + ".png"));
         }
 
     }
@@ -618,7 +628,8 @@ class App extends JFrame {
         // loading tiles variants
         loadTileAssets();
 
-        //frames count is one less for now, later i will change. This is because loadimages has (i+1) instead of i as tileset images starts from 1.png
+        // frames count is one less for now, later i will change. This is because
+        // loadimages has (i+1) instead of i as tileset images starts from 1.png
         playerIdle = new Animation("player/idle", 9, 10, 32, 32);
         playerIdle.setAnimRenderOffset(0, 0, 0, 0);
 
@@ -761,7 +772,7 @@ class Animation {
     GameImage loader;
     double frameDuration, animationTime = 0;
     int currentFrame = 0;
-    RenderOffset animRenderOffset = new RenderOffset(0,0,0,0);
+    RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
 
     // For loadin animation from a group of sprites/ from folder
     public Animation(String path, int framesCount, int animFrequency, int spriteW, int spriteH) {
@@ -785,7 +796,7 @@ class Animation {
         this.loader = new GameImage();
     }
 
-    public void setAnimRenderOffset(int x, int y, int w, int h){
+    public void setAnimRenderOffset(int x, int y, int w, int h) {
         animRenderOffset.x = x;
         animRenderOffset.y = y;
         animRenderOffset.w = w;
