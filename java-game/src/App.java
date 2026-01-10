@@ -539,16 +539,11 @@ class App extends JFrame {
                 if (player != null) {
                     player.render(g);
                 }
-                Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
-                g.setFont(font);
-                // Set color (optional)
-                g.setColor(Color.BLACK);
-                // Draw the string
-                g.drawString("Actual Location in the memory ->", (int)(player.alphaX) - 340,(int)(player.alphaY + 40));
-
-                g.drawString("Rendered using Camera Offset -> ", FRAME_WIDTH/2 - 340, FRAME_HEIGHT/2);
-
-
+                // Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
+                // g.setFont(font);
+                // g.setColor(Color.BLACK);
+                // g.drawString("Actual Location in the memory ->", (int)(player.alphaX) - 340,(int)(player.alphaY + 40));
+                // g.drawString("Rendered using Camera Offset -> ", FRAME_WIDTH/2 - 340, FRAME_HEIGHT/2);
             }
         };
         add(panel);
