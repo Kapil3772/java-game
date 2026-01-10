@@ -601,26 +601,18 @@ class App extends JFrame {
         Thread gameThread = new Thread(() -> run(running));
         gameThread.start();
     }
+    public void loadTileAssets(){
+        tileVariantRegistry.register("ground", 0, loader.loadImage("tiles/ground/0.png"));
+        tileVariantRegistry.register("stone", 0, loader.loadImage("tiles/stone/0.png"));
+        //Grass Tiles
+        for(int i = 1; i<=41; i++){
+            tileVariantRegistry.register("grass", i, loader.loadImage("tiles/grass/"+i+".png"));
+        }
+    }
 
     public void loadAll() {
         // loading tiles variants
-        tileVariantRegistry.register("ground", 0, loader.loadImage("tiles/ground/0.png"));
-        tileVariantRegistry.register("stone", 0, loader.loadImage("tiles/stone/0.png"));
-        tileVariantRegistry.register("grass", 24, loader.loadImage("tiles/grass/24.png"));
-        tileVariantRegistry.register("grass", 25, loader.loadImage("tiles/grass/25.png"));
-        tileVariantRegistry.register("grass", 20, loader.loadImage("tiles/grass/20.png"));
-        tileVariantRegistry.register("grass", 21, loader.loadImage("tiles/grass/21.png"));
-        tileVariantRegistry.register("grass", 1, loader.loadImage("tiles/grass/1.png"));
-        tileVariantRegistry.register("grass", 2, loader.loadImage("tiles/grass/2.png"));
-        tileVariantRegistry.register("grass", 3, loader.loadImage("tiles/grass/3.png"));
-        tileVariantRegistry.register("grass", 4, loader.loadImage("tiles/grass/4.png"));
-        tileVariantRegistry.register("grass", 5, loader.loadImage("tiles/grass/5.png"));
-        tileVariantRegistry.register("grass", 6, loader.loadImage("tiles/grass/6.png"));
-        tileVariantRegistry.register("grass", 9, loader.loadImage("tiles/grass/9.png"));
-        tileVariantRegistry.register("grass", 10, loader.loadImage("tiles/grass/10.png"));
-        tileVariantRegistry.register("grass", 22, loader.loadImage("tiles/grass/22.png"));
-        tileVariantRegistry.register("grass", 39, loader.loadImage("tiles/grass/39.png"));
-        tileVariantRegistry.register("grass", 13, loader.loadImage("tiles/grass/13.png"));
+        loadTileAssets();
 
         // assets.load("playerIdle", "player/IDLE");
         playerIdle = new Animation("player/IDLE.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 10, 10);
@@ -744,13 +736,14 @@ class GameImage {
         }
     }
 
-    public BufferedImage[] loadImages(String folderPath, int n) {
+    public BufferedImage[] loadImagesFromFolder(String folderPath, int n) {
         BufferedImage[] images = new BufferedImage[n];
         for (int i = 0; i < n; i++) {
             images[i] = loadImage(folderPath + "/" + (int) (i + 1) + ".png");
         }
         return images;
     }
+
 }
 
 class Animation {
@@ -796,7 +789,7 @@ class Animation {
 
     public BufferedImage[] loadAnimationFromManySprite(String path, int imgCount) {
         BufferedImage[] imgs = null;
-        imgs = loader.loadImages(path, imgCount);
+        imgs = loader.loadImagesFromFolder(path, imgCount);
         return imgs;
     }
 
