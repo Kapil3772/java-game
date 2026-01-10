@@ -204,7 +204,7 @@ class Player extends PhysicsEntity {
 
     double speedFactor;
     double velocityX, velocityY;
-    BufferedImage sprite;
+    BufferedImage sprite = null;
     RenderOffset renderOffset = new RenderOffset(0, 0, 0, 0);
     RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
     double imageScalingFactor = 1.0;
@@ -240,13 +240,13 @@ class Player extends PhysicsEntity {
         this.isMoving = false;
         this.speedFactor = 1.0;
         this.facingRight = true;
-        this.spriteW = 48;
+        this.spriteW = 32;
         this.spriteH = 32;
-        this.imageScalingFactor = 2;
-        this.renderOffset.w = (int) (spriteW * imageScalingFactor / 2);
-        this.renderOffset.h = (int) (spriteH * imageScalingFactor / 2);
-        this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
-        this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
+        this.imageScalingFactor = 1;
+        sprite = currentAnimation.getCurrentFrame(game.deltaTime);
+        updateAnimationRenderOffset();
+        // this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
+        // this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
         this.gravityFactor = 1;
         this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor;
     }
@@ -361,13 +361,10 @@ class Player extends PhysicsEntity {
     public void updateAnimation() {
         if (isMoving && game.inputs.isSprinting) {
             this.nextAnimState = PlayerAnimState.RUN;
-            animRenderOffset.x = -10;
         } else if (isMoving) {
             this.nextAnimState = PlayerAnimState.WALK;
-            animRenderOffset.x = -4;
         } else {
             this.nextAnimState = PlayerAnimState.IDLE;
-            animRenderOffset.x = 0;
         }
         if (nextAnimState != currAnimState) {
             currAnimState = nextAnimState;
@@ -390,8 +387,12 @@ class Player extends PhysicsEntity {
     }
 
     public void updateAnimationRenderOffset() {
-        this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2) + animRenderOffset.x;
-        this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h))) + animRenderOffset.y;
+        this.animRenderOffset = currentAnimation.animRenderOffset;
+
+        this.renderOffset.x = (int) ((this.rect.w - (sprite.getWidth() + renderOffset.w)) / 2) + animRenderOffset.x;
+        this.renderOffset.y = (int) ((this.rect.h - (sprite.getHeight() + renderOffset.h))) + animRenderOffset.y;
+        this.renderOffset.w = (int) (sprite.getWidth() * imageScalingFactor) + animRenderOffset.w;
+        this.renderOffset.h = (int) (sprite.getHeight() * imageScalingFactor) + animRenderOffset.h;
     }
 
     public void updateInterpolation(double ipf) {
@@ -404,25 +405,25 @@ class Player extends PhysicsEntity {
             if (facingRight) {
                 g.drawImage(sprite, ((int) alphaX) + renderOffset.x + (int) (game.camera.cameraOffsetX),
                         ((int) alphaY) + renderOffset.y + (int) (game.camera.cameraOffsetY),
-                        spriteW + renderOffset.w,
-                        spriteH + renderOffset.h, null);
+                        sprite.getWidth() + renderOffset.w,
+                        sprite.getHeight() + renderOffset.h, null);
 
                 g.setColor(Color.BLUE);
                 g.drawRect(((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
-                        spriteW + renderOffset.w,
-                        spriteH + renderOffset.h);
+                        sprite.getWidth() + renderOffset.w,
+                        sprite.getHeight() + renderOffset.h);
 
             } else {
                 g.drawImage(sprite, ((int) alphaX) - renderOffset.x + rect.w + (int) (game.camera.cameraOffsetX),
                         ((int) alphaY) + renderOffset.y + (int) (game.camera.cameraOffsetY),
-                        -spriteW - renderOffset.w,
-                        spriteH + renderOffset.h, null);
+                        -sprite.getWidth() - renderOffset.w,
+                        sprite.getHeight() + renderOffset.h, null);
 
                 g.setColor(Color.BLUE);
                 g.drawRect(((int) alphaX) - renderOffset.x + rect.w - renderOffset.w -
-                        spriteW,
+                        sprite.getWidth(),
                         ((int) alphaY) + renderOffset.y,
-                        spriteW + renderOffset.w, spriteH + renderOffset.h);
+                        sprite.getWidth() + renderOffset.w, sprite.getHeight() + renderOffset.h);
 
             }
 
@@ -464,8 +465,8 @@ class Camera {
 
 class App extends JFrame {
     // Class Constants
-    private static final int FRAME_HEIGHT = 700;
-    private static final int FRAME_WIDTH = 700;
+    private static final int FRAME_WIDTH = 1080;
+    private static final int FRAME_HEIGHT = 800;
     private static final int FPS = 60;
 
     private static final long GAME_LOOP_FREQUENCY = 80;
@@ -602,24 +603,30 @@ class App extends JFrame {
         gameThread.start();
     }
     public void loadTileAssets(){
+        //Misellaneous tiles
         tileVariantRegistry.register("ground", 0, loader.loadImage("tiles/ground/0.png"));
         tileVariantRegistry.register("stone", 0, loader.loadImage("tiles/stone/0.png"));
+
         //Grass Tiles
         for(int i = 1; i<=41; i++){
             tileVariantRegistry.register("grass", i, loader.loadImage("tiles/grass/"+i+".png"));
         }
+
     }
 
     public void loadAll() {
         // loading tiles variants
         loadTileAssets();
 
-        // assets.load("playerIdle", "player/IDLE");
-        playerIdle = new Animation("player/IDLE.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 10, 10);
+        //frames count is one less for now, later i will change. This is because loadimages has (i+1) instead of i as tileset images starts from 1.png
+        playerIdle = new Animation("player/idle", 9, 10, 32, 32);
+        playerIdle.setAnimRenderOffset(0, 0, 0, 0);
 
-        playerWalk = new Animation("player/WALK.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 12, 12);
+        playerWalk = new Animation("player/walk", 11, 12, 32, 32);
+        playerWalk.setAnimRenderOffset(0, 0, 0, 0);
 
-        playerRun = new Animation("player/RUN.png", new int[] { 48, 32 }, new int[] { 96, 96 }, 16, 16);
+        playerRun = new Animation("player/run", 15, 16, 32, 32);
+        playerRun.setAnimRenderOffset(0, 0, 0, 0);
 
     }
 
@@ -749,40 +756,51 @@ class GameImage {
 class Animation {
     int framesCount;
     int canvasW, canvasH; // pixels
-    int[] spriteSize;
+    int spriteW, spriteH;
     BufferedImage[] frames;
     GameImage loader;
     double frameDuration, animationTime = 0;
     int currentFrame = 0;
+    RenderOffset animRenderOffset = new RenderOffset(0,0,0,0);
 
-    // For loadin animation from a group of sprites
-    public Animation(String path, int framesCount, int animFrequency) {
+    // For loadin animation from a group of sprites/ from folder
+    public Animation(String path, int framesCount, int animFrequency, int spriteW, int spriteH) {
         this.framesCount = framesCount;
         this.frameDuration = (1.0 / animFrequency);
+        this.spriteW = spriteW;
+        this.spriteH = spriteH;
         this.loader = new GameImage();
         this.frames = loadAnimationFromManySprite(path, framesCount);
     }
 
     // for loading animation from a single sprite sheet
-    public Animation(String path, int[] spriteSize, int[] canvasSize, int framesCount, int animFrequency) {
+    public Animation(String path, int spriteW, int spriteH, int[] canvasSize, int framesCount, int animFrequency) {
         this.framesCount = framesCount;
         this.canvasW = canvasSize[0];
         this.canvasH = canvasSize[1];
-        this.spriteSize = spriteSize;
+        this.spriteW = spriteW;
+        this.spriteH = spriteH;
         this.frameDuration = (1.0 / animFrequency);
         frames = loadAnimationFromSingleSprite(path);
         this.loader = new GameImage();
+    }
+
+    public void setAnimRenderOffset(int x, int y, int w, int h){
+        animRenderOffset.x = x;
+        animRenderOffset.y = y;
+        animRenderOffset.w = w;
+        animRenderOffset.h = h;
     }
 
     public BufferedImage[] loadAnimationFromSingleSprite(String path) {
         BufferedImage spriteSheet = new GameImage().loadImage(path);
         BufferedImage[] bufferedImageArray = new BufferedImage[framesCount];
         int xOffset, yOffset;
-        xOffset = (canvasW - spriteSize[0]) / 2;
-        yOffset = (canvasH - 16 - spriteSize[1]);
+        xOffset = (canvasW - spriteW) / 2;
+        yOffset = (canvasH - 16 - spriteH);
         for (int i = 0; i < framesCount; i++) {
-            bufferedImageArray[i] = spriteSheet.getSubimage((i * canvasW) + xOffset, 0 + yOffset, spriteSize[0],
-                    spriteSize[1]);
+            bufferedImageArray[i] = spriteSheet.getSubimage((i * canvasW) + xOffset, 0 + yOffset, spriteH,
+                    spriteH);
         }
         return bufferedImageArray;
     }
