@@ -196,7 +196,10 @@ class InputState {
 enum PlayerAnimState {
     IDLE,
     WALK,
-    RUN
+    RUN,
+    JUMP_START,
+    JUMP_FALL,
+    JUMP_TRANSITION
 }
 
 class Player extends PhysicsEntity {
@@ -204,6 +207,7 @@ class Player extends PhysicsEntity {
 
     double speedFactor;
     double velocityX, velocityY;
+    final double jumpTransitionVelocity;
     BufferedImage sprite = null;
     RenderOffset renderOffset = new RenderOffset(0, 0, 0, 0);
     RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
@@ -218,12 +222,12 @@ class Player extends PhysicsEntity {
     // Player states
     boolean isJumping = false;
     boolean isMoving, facingRight, isFalling;
-    boolean onGround = false;
+    boolean onGround = false, onAir = false, onJumpTransition = false;
     double gravityFactor;
     double fallFactor;
     double terminalVelocity;
     int jumps = 2;
-    int airTime = 0;
+    int airTimeFrames = 0;
     App game;
 
     // Temporary test variables
@@ -232,7 +236,6 @@ class Player extends PhysicsEntity {
 
     public Player(App game, double x, double y, int w, int h) {
         super(x, y, w, h);
-        this.velocityX = 80.0;
         this.velocityY = 0.0;
         this.game = game;
         this.currAnimState = PlayerAnimState.IDLE;
@@ -242,13 +245,15 @@ class Player extends PhysicsEntity {
         this.facingRight = true;
         this.spriteW = 32;
         this.spriteH = 32;
-        this.imageScalingFactor = 1;
+        this.imageScalingFactor = 2;
         sprite = currentAnimation.getCurrentFrame(game.deltaTime);
         updateAnimationRenderOffset();
         // this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
         // this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
         this.gravityFactor = 1;
         this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor;
+        this.velocityX = 80.0 * imageScalingFactor;
+        this.jumpTransitionVelocity = terminalVelocity * 0.3;
     }
 
     public void jump() {
@@ -280,9 +285,22 @@ class Player extends PhysicsEntity {
             speedFactor = 1;
         }
 
-        isFalling = velocityY > 0;
+        if (Math.abs(velocityY) < jumpTransitionVelocity) {
+            onJumpTransition = true;
+        } else {
+            onJumpTransition = false;
+        }
+        if (!onJumpTransition) {
+            isJumping = velocityY < 0;
+            isFalling = velocityY > 0;
+        } else {
+            isJumping = false;
+            isFalling = false;
+        }
         fallFactor = isFalling ? 1.9 : 1.0;
 
+        // System.out.println(" IsJumping :" +isJumping +" IsFalling :" +isFalling +
+        // "Transition :" + onJumpTransition+ "," + velocityY);
         // moving in X direction
         prevX = rect.xPos;
         rect.xPos += velocityX * speedFactor * moving[0] * dt;
@@ -315,9 +333,11 @@ class Player extends PhysicsEntity {
 
         // Ressetting
         if (!onGround) {
-            airTime++;
+            airTimeFrames++;
+            onAir = true;
         } else {
-            airTime = 0;
+            airTimeFrames = 0;
+            onAir = false;
         }
     }
 
@@ -359,7 +379,15 @@ class Player extends PhysicsEntity {
     }
 
     public void updateAnimation() {
-        if (isMoving && game.inputs.isSprinting) {
+        if (onAir) {
+            if (onJumpTransition) {
+                this.nextAnimState = PlayerAnimState.JUMP_TRANSITION;
+            } else if (isJumping) {
+                this.nextAnimState = PlayerAnimState.JUMP_START;
+            } else {
+                this.nextAnimState = PlayerAnimState.JUMP_FALL;
+            }
+        } else if (isMoving && game.inputs.isSprinting) {
             this.nextAnimState = PlayerAnimState.RUN;
         } else if (isMoving) {
             this.nextAnimState = PlayerAnimState.WALK;
@@ -369,6 +397,15 @@ class Player extends PhysicsEntity {
         if (nextAnimState != currAnimState) {
             currAnimState = nextAnimState;
             switch (currAnimState) {
+                case JUMP_TRANSITION:
+                    this.currentAnimation = game.playerJumpTransition;
+                    break;
+                case JUMP_START:
+                    this.currentAnimation = game.playerJumpStart;
+                    break;
+                case JUMP_FALL:
+                    this.currentAnimation = game.playerJumpFall;
+                    break;
                 case RUN:
                     this.currentAnimation = game.playerRun;
                     break;
@@ -500,7 +537,7 @@ class App extends JFrame {
     Player player;
     Camera camera;
     Asset assets;
-    Animation playerIdle, playerWalk, playerRun;
+    Animation playerIdle, playerWalk, playerRun, playerJumpStart, playerJumpFall, playerJumpTransition;
 
     // tiles Variables
     TileVariantRegistry tileVariantRegistry = new TileVariantRegistry();
@@ -542,8 +579,10 @@ class App extends JFrame {
                 // Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
                 // g.setFont(font);
                 // g.setColor(Color.BLACK);
-                // g.drawString("Actual Location in the memory ->", (int)(player.alphaX) - 340,(int)(player.alphaY + 40));
-                // g.drawString("Rendered using Camera Offset -> ", FRAME_WIDTH/2 - 340, FRAME_HEIGHT/2);
+                // g.drawString("Actual Location in the memory ->", (int)(player.alphaX) -
+                // 340,(int)(player.alphaY + 40));
+                // g.drawString("Rendered using Camera Offset -> ", FRAME_WIDTH/2 - 340,
+                // FRAME_HEIGHT/2);
             }
         };
         add(panel);
@@ -625,14 +664,18 @@ class App extends JFrame {
 
         // frames count is one less for now, later i will change. This is because
         // loadimages has (i+1) instead of i as tileset images starts from 1.png
-        playerIdle = new Animation("player/idle", 9, 10, 32, 32);
+        playerIdle = new Animation("player/idle", 9, 10, 32, 32, true);
         playerIdle.setAnimRenderOffset(0, 0, 0, 0);
 
-        playerWalk = new Animation("player/walk", 11, 12, 32, 32);
+        playerWalk = new Animation("player/walk", 11, 12, 32, 32, true);
         playerWalk.setAnimRenderOffset(0, 0, 0, 0);
 
-        playerRun = new Animation("player/run", 15, 16, 32, 32);
+        playerRun = new Animation("player/run", 15, 16, 32, 32, true);
         playerRun.setAnimRenderOffset(0, 0, 0, 0);
+
+        playerJumpStart = new Animation("player/jumpStart", 2, 10, 32, 32, true);
+        playerJumpFall = new Animation("player/jumpFall", 2, 10, 32, 32, true);
+        playerJumpTransition = new Animation("player/jumpTransition", 2, 4, 32, 32, false);
 
     }
 
@@ -764,31 +807,39 @@ class Animation {
     int canvasW, canvasH; // pixels
     int spriteW, spriteH;
     BufferedImage[] frames;
-    GameImage loader;
+    boolean looping = true, isDone = false;
+    public static GameImage loader;
     double frameDuration, animationTime = 0;
     int currentFrame = 0;
     RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
 
     // For loadin animation from a group of sprites/ from folder
-    public Animation(String path, int framesCount, int animFrequency, int spriteW, int spriteH) {
+    public Animation(String path, int framesCount, int animFrequency, int spriteW, int spriteH, boolean loop) {
         this.framesCount = framesCount;
         this.frameDuration = (1.0 / animFrequency);
         this.spriteW = spriteW;
         this.spriteH = spriteH;
-        this.loader = new GameImage();
-        this.frames = loadAnimationFromManySprite(path, framesCount);
+        setLoaderObject();
+        this.frames = loadAnimationFromManySprite(path, framesCount + 1);
+        this.looping = loop;
     }
 
     // for loading animation from a single sprite sheet
-    public Animation(String path, int spriteW, int spriteH, int[] canvasSize, int framesCount, int animFrequency) {
+    public Animation(String path, int spriteW, int spriteH, int[] canvasSize, int framesCount, int animFrequency,
+            boolean loop) {
         this.framesCount = framesCount;
         this.canvasW = canvasSize[0];
         this.canvasH = canvasSize[1];
         this.spriteW = spriteW;
         this.spriteH = spriteH;
         this.frameDuration = (1.0 / animFrequency);
+        setLoaderObject();
         frames = loadAnimationFromSingleSprite(path);
-        this.loader = new GameImage();
+        this.looping = loop;
+    }
+
+    public static void setLoaderObject() {
+        loader = new GameImage();
     }
 
     public void setAnimRenderOffset(int x, int y, int w, int h) {
@@ -817,15 +868,26 @@ class Animation {
         return imgs;
     }
 
-    public BufferedImage getCurrentFrame(double dt) {
+    public BufferedImage getCurrentFrame(double dt){
         animationTime += dt;
-        currentFrame = (int) (animationTime / frameDuration) % framesCount;
-        return frames[currentFrame];
+        currentFrame = (int) (animationTime / frameDuration) % (framesCount + 1);
+        if(!isDone && currentFrame == framesCount){
+            isDone = true;
+            System.out.println("done");
+        }
+        if (!looping && isDone){
+            return frames[framesCount];
+        }
+        else{
+            return frames[currentFrame];
+        }
+        
     }
 
     public void reset() {
         animationTime = 0;
         currentFrame = 0;
+        isDone = false;
     }
 }
 
