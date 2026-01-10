@@ -199,7 +199,16 @@ enum PlayerAnimState {
     RUN,
     JUMP_START,
     JUMP_FALL,
-    JUMP_TRANSITION
+    JUMP_TRANSITION,
+    WALL_SLIDE,
+    WALL_CONTACT,
+    WALL_JUMP
+}
+
+enum WallState {
+    NONE,
+    HOLDING,
+    SLIDING
 }
 
 class Player extends PhysicsEntity {
@@ -220,12 +229,16 @@ class Player extends PhysicsEntity {
     PlayerAnimState nextAnimState;
 
     // Player states
+    WallState wallState = WallState.NONE;
     boolean isJumping = false;
     boolean isMoving, facingRight, isFalling;
     boolean onGround = false, onAir = false, onJumpTransition = false;
-    double gravityFactor;
-    double fallFactor;
-    double terminalVelocity;
+    boolean isTouchingSideWall = false;
+    double holdingWallTimer = 0.0; // seconds before the player starts sliding downwards on the wall
+    final double gravityFactor;
+    double fallFactor, frictionalFactor = 1;
+    final double terminalVelocity;
+
     int jumps = 2;
     int airTimeFrames = 0;
     App game;
@@ -254,6 +267,10 @@ class Player extends PhysicsEntity {
         this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor;
         this.velocityX = 80.0 * imageScalingFactor;
         this.jumpTransitionVelocity = terminalVelocity * 0.3;
+    }
+
+    boolean canWallInteract() {
+        return !onGround && isTouchingSideWall && velocityY > 0;
     }
 
     public void jump() {
@@ -285,7 +302,7 @@ class Player extends PhysicsEntity {
             speedFactor = 1;
         }
 
-        if (Math.abs(velocityY) < jumpTransitionVelocity) {
+        if (Math.abs(velocityY) < jumpTransitionVelocity && (wallState == WallState.NONE)) {
             onJumpTransition = true;
         } else {
             onJumpTransition = false;
@@ -306,6 +323,7 @@ class Player extends PhysicsEntity {
         rect.xPos += velocityX * speedFactor * moving[0] * dt;
 
         // resolving X collision
+        isTouchingSideWall = false;
         resolveCollisionX();
 
         // moving in y direction--
@@ -324,12 +342,36 @@ class Player extends PhysicsEntity {
         // calculating displacement using final velocity of the frame
         velocityY = Math.min(velocityY + (this.game.ACCLN_DUE_TO_GRAVITY * fallFactor * gravityFactor * dt),
                 terminalVelocity);
+
         dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
 
         // resolving y collision
         resolveCollisionY();
+        if (canWallInteract()) {
+
+            if (wallState == WallState.NONE) {
+                wallState = WallState.HOLDING;
+                holdingWallTimer = 0;
+            }
+
+            holdingWallTimer += dt;
+
+            if (holdingWallTimer < 1.0) {
+                // HOLD
+                velocityY = 0;
+            } else {
+                // SLIDE
+                wallState = WallState.SLIDING;
+                velocityY = Math.min(velocityY, 80); // slide speed
+            }
+
+        } else {
+            // reset
+            wallState = WallState.NONE;
+            holdingWallTimer = 0;
+        }
 
         // Ressetting
         if (!onGround) {
@@ -348,10 +390,12 @@ class Player extends PhysicsEntity {
                 // moving right
                 if (rect.xPos > prevX) {
                     rect.xPos = tile.rect.xPos - rect.w;
+                    isTouchingSideWall = true;
                 }
                 // moving left
                 else if (rect.xPos < prevX) {
                     rect.xPos = tile.rect.xPos + tile.rect.w;
+                    isTouchingSideWall = true;
                 }
             }
         }
@@ -379,7 +423,12 @@ class Player extends PhysicsEntity {
     }
 
     public void updateAnimation() {
-        if (onAir) {
+        if(wallState.equals(WallState.HOLDING)){
+            this.nextAnimState = PlayerAnimState.WALL_CONTACT;
+        }else if(wallState.equals(WallState.SLIDING)){
+            this.nextAnimState = PlayerAnimState.WALL_SLIDE;
+        }
+        else if (onAir) {
             if (onJumpTransition) {
                 this.nextAnimState = PlayerAnimState.JUMP_TRANSITION;
             } else if (isJumping) {
@@ -397,6 +446,12 @@ class Player extends PhysicsEntity {
         if (nextAnimState != currAnimState) {
             currAnimState = nextAnimState;
             switch (currAnimState) {
+                case WALL_CONTACT:
+                    this.currentAnimation = game.playerWallContact;
+                    break;
+                case WALL_SLIDE:
+                    this.currentAnimation = game.playerWallSlide;
+                    break;
                 case JUMP_TRANSITION:
                     this.currentAnimation = game.playerJumpTransition;
                     break;
@@ -495,8 +550,8 @@ class Camera {
     }
 
     public void updateCameraOffset() {
-        cameraOffsetX = -(player.rect.getCenterX() - frameW / 2);
-        cameraOffsetY = -(player.rect.getCenterY() - frameH / 2);
+        //cameraOffsetX = -(player.rect.getCenterX() - frameW / 2);
+        //cameraOffsetY = -(player.rect.getCenterY() - frameH / 2);
     }
 }
 
@@ -537,7 +592,8 @@ class App extends JFrame {
     Player player;
     Camera camera;
     Asset assets;
-    Animation playerIdle, playerWalk, playerRun, playerJumpStart, playerJumpFall, playerJumpTransition;
+    Animation playerIdle, playerWalk, playerRun, playerJumpStart, playerJumpFall, playerJumpTransition,
+            playerWallContact, playerWallJump, playerWallSlide, playerWallClimb;
 
     // tiles Variables
     TileVariantRegistry tileVariantRegistry = new TileVariantRegistry();
@@ -553,7 +609,7 @@ class App extends JFrame {
 
         // tiles
         // player
-        this.player = new Player(this, 300, 50, 24, 60);
+        this.player = new Player(this, 300, 50, 30, 90);
 
         // camera
         camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT);
@@ -676,7 +732,10 @@ class App extends JFrame {
         playerJumpStart = new Animation("player/jumpStart", 2, 10, 32, 32, true);
         playerJumpFall = new Animation("player/jumpFall", 2, 10, 32, 32, true);
         playerJumpTransition = new Animation("player/jumpTransition", 2, 4, 32, 32, false);
-
+        playerWallContact = new Animation("player/wallContact", 2, 8, 32, 32, false);
+        playerWallContact.setAnimRenderOffset(-3, 0, 0, 0);
+        playerWallSlide = new Animation("player/wallSlide", 2, 10, 32, 32, true);
+        playerWallSlide.setAnimRenderOffset(-3, 0, 0, 0);
     }
 
     public void run(boolean running) {
@@ -868,20 +927,18 @@ class Animation {
         return imgs;
     }
 
-    public BufferedImage getCurrentFrame(double dt){
+    public BufferedImage getCurrentFrame(double dt) {
         animationTime += dt;
         currentFrame = (int) (animationTime / frameDuration) % (framesCount + 1);
-        if(!isDone && currentFrame == framesCount){
+        if (!isDone && currentFrame == framesCount) {
             isDone = true;
-            System.out.println("done");
         }
-        if (!looping && isDone){
+        if (!looping && isDone) {
             return frames[framesCount];
-        }
-        else{
+        } else {
             return frames[currentFrame];
         }
-        
+
     }
 
     public void reset() {
