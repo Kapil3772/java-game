@@ -9,8 +9,16 @@ Here I’ll be documenting progress, changes, and learnings throughout the proje
 ### ✨ Features Added
 1. All the features updated befrore making this devlog. lol
 2. Introduced Camera so that player is rendered on the center of the screen and everything else is rendered 
+---
+### 🖼 Visual Changes
 
+**Before (without camera offset):**
+<img src="java-game/resources/devlog/gifs/before_camera_offset.gif" width="450">
 
+<br>
+
+**After (with camera offset):**
+<img src="java-game/resources/devlog/gifs/after_camera_offset.gif" width="450">
 
 ---
 
@@ -19,14 +27,3 @@ Here I’ll be documenting progress, changes, and learnings throughout the proje
 
 ---
 
-### 🖼 Visual Changes
-
-**Before (without camera offset):**
-<img src="resources/devlog/gifs/before_camera_offset.gif" width="450">
-
-<br>
-
-**After (with camera offset):**
-<img src="resources/devlog/gifs/after_camera_offset.gif" width="450">
-
----
