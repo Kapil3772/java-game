@@ -1,5 +1,5 @@
 {
-  "tileSize": 16,
+  "tileSize": 32,
   "tiles": [
     {"type": "grass", "variant": 24, "gridX": 11, "gridY": 5},
     {"type": "grass", "variant": 25, "gridX": 12, "gridY": 5},

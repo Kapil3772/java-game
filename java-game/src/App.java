@@ -94,18 +94,24 @@ class TileMap {
     OnGridTile[] onGridTiles;
     int tilesCount;
     TileVariantRegistry registry;
+    Camera camera;
 
-    public TileMap(MapData map, TileVariantRegistry registry) {
+    public TileMap(MapData map, TileVariantRegistry registry, Camera camera) {
         this.registry = registry;
         loadMapData(map);
+        this.camera = camera;
     }
 
     public void render(Graphics g) {
         g.setColor(Color.BLACK);
         for (OnGridTile tile : onGridTiles) {
             if (tile != null) {
-                g.drawImage(tile.tileVariant.image, (int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                g.drawImage(tile.tileVariant.image, (int) (tile.rect.xPos + camera.cameraOffsetX),
+                        (int) (tile.rect.yPos + camera.cameraOffsetY), tile.rect.w,
                         tile.rect.h, null);
+                // rendering actual position of tiles
+                g.setColor(Color.BLACK);
+                g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w, tile.rect.h);
             }
         }
     }
@@ -236,7 +242,7 @@ class Player extends PhysicsEntity {
         this.facingRight = true;
         this.spriteW = 48;
         this.spriteH = 32;
-        this.imageScalingFactor = 1;
+        this.imageScalingFactor = 2;
         this.renderOffset.w = (int) (spriteW * imageScalingFactor / 2);
         this.renderOffset.h = (int) (spriteH * imageScalingFactor / 2);
         this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
@@ -249,7 +255,7 @@ class Player extends PhysicsEntity {
         this.jumps = Math.max(0, jumps - 1);
         this.onGround = false;
         this.isJumping = true;
-        this.velocityY = -250;
+        this.velocityY = -350;
     }
 
     public void update(double dt, int[] moving) {
@@ -396,27 +402,28 @@ class Player extends PhysicsEntity {
     public void render(Graphics g) {
         if (sprite != null) {
             if (facingRight) {
-                g.drawImage(sprite, ((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
+                g.drawImage(sprite, ((int) alphaX) + renderOffset.x + (int) (game.camera.cameraOffsetX),
+                        ((int) alphaY) + renderOffset.y + (int) (game.camera.cameraOffsetY),
                         spriteW + renderOffset.w,
                         spriteH + renderOffset.h, null);
 
-                /*
-                 * g.setColor(Color.BLUE);
-                 * g.drawRect(((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
-                 * spriteW + renderOffset.w,
-                 * spriteH + renderOffset.h);
-                 */
+                g.setColor(Color.BLUE);
+                g.drawRect(((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
+                        spriteW + renderOffset.w,
+                        spriteH + renderOffset.h);
+
             } else {
-                g.drawImage(sprite, ((int) alphaX) - renderOffset.x + rect.w, ((int) alphaY) + renderOffset.y,
+                g.drawImage(sprite, ((int) alphaX) - renderOffset.x + rect.w + (int) (game.camera.cameraOffsetX),
+                        ((int) alphaY) + renderOffset.y + (int) (game.camera.cameraOffsetY),
                         -spriteW - renderOffset.w,
                         spriteH + renderOffset.h, null);
-                /*
-                 * g.setColor(Color.BLUE);
-                 * g.drawRect(((int) alphaX) - renderOffset.x + rect.w - renderOffset.w -
-                 * spriteW,
-                 * ((int) alphaY) + renderOffset.y,
-                 * spriteW + renderOffset.w, spriteH + renderOffset.h);
-                 */
+
+                g.setColor(Color.BLUE);
+                g.drawRect(((int) alphaX) - renderOffset.x + rect.w - renderOffset.w -
+                        spriteW,
+                        ((int) alphaY) + renderOffset.y,
+                        spriteW + renderOffset.w, spriteH + renderOffset.h);
+
             }
 
         } else {
@@ -430,10 +437,35 @@ class Player extends PhysicsEntity {
     }
 }
 
+class Camera {
+    double xPos, yPos, alphaX, alphaY;
+    int frameH, frameW;
+    double cameraOffsetX, cameraOffsetY;
+    Player player;
+
+    public Camera(Player player, int FRAME_WIDTH, int FRAME_HEIGHT) {
+        xPos = player.rect.getCenterX();
+        yPos = player.rect.getCenterY();
+        this.player = player;
+        frameH = FRAME_HEIGHT;
+        frameW = FRAME_WIDTH;
+        alphaX = 0;
+        alphaY = 0;
+        cameraOffsetX = 0;
+        cameraOffsetY = 0;
+        updateCameraOffset();
+    }
+
+    public void updateCameraOffset() {
+        cameraOffsetX = -(player.rect.getCenterX() - frameW / 2);
+        cameraOffsetY = -(player.rect.getCenterY() - frameH / 2);
+    }
+}
+
 class App extends JFrame {
     // Class Constants
-    private static final int FRAME_HEIGHT = 500;
-    private static final int FRAME_WIDTH = 500;
+    private static final int FRAME_HEIGHT = 700;
+    private static final int FRAME_WIDTH = 700;
     private static final int FPS = 60;
 
     private static final long GAME_LOOP_FREQUENCY = 80;
@@ -465,6 +497,7 @@ class App extends JFrame {
 
     // Entities
     Player player;
+    Camera camera;
     Asset assets;
     Animation playerIdle, playerWalk, playerRun;
 
@@ -479,11 +512,14 @@ class App extends JFrame {
         loadAll();
 
         MapData map = Maploader.loadMap("map1.json");
-        tileMap = new TileMap(map, tileVariantRegistry);
 
         // tiles
         // player
-        this.player = new Player(this, 300, 50, 30, 42);
+        this.player = new Player(this, 300, 50, 24, 60);
+
+        // camera
+        camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT);
+        tileMap = new TileMap(map, tileVariantRegistry, camera);
 
         // Add a custom drawing panel
         this.panel = new JPanel() {
@@ -659,7 +695,7 @@ class App extends JFrame {
         player.update(dt, moving);
 
         // Other future entities updates here
-
+        camera.updateCameraOffset();
         /*
          * if (framescount % 60 == 0) {
          * lagSpike();
