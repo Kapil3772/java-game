@@ -16,6 +16,7 @@ import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 
 import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.io.IOException;
 
 class Rect {
@@ -113,8 +114,8 @@ class TileMap {
                         (int) (tile.rect.yPos + camera.cameraOffsetY), tile.rect.w,
                         tile.rect.h, null);
                 // rendering actual position of tiles
-                g.setColor(new Color(225, 0, 0, 225));
-                g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w, tile.rect.h);
+                // g.setColor(new Color(225, 0, 0, 225));
+                // g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w, tile.rect.h);
             }
         }
     }
@@ -154,13 +155,25 @@ class MapData {
     List<TileData> tiles;
 }
 
+// class Maploader {
+// public static MapData loadMap(String path) {
+// Gson gson = new Gson();
+// try (FileReader reader = new FileReader(path)) {
+// MapData map = gson.fromJson(reader, MapData.class);
+// return map;
+// } catch (IOException e) {
+// e.printStackTrace();
+// return null;
+// }
+// }
+// }
+
 class Maploader {
-    public static MapData loadMap(String path) {
+    public static MapData loadMap(String resourcePath) {
         Gson gson = new Gson();
-        try (FileReader reader = new FileReader(path)) {
-            MapData map = gson.fromJson(reader, MapData.class);
-            return map;
-        } catch (IOException e) {
+        try (var reader = new InputStreamReader(App.class.getResourceAsStream("/" + resourcePath))) {
+            return gson.fromJson(reader, MapData.class);
+        } catch (Exception e) {
             e.printStackTrace();
             return null;
         }
@@ -680,29 +693,29 @@ class Player extends PhysicsEntity {
                 // sprite.getWidth() + renderOffset.w, sprite.getHeight() + renderOffset.h);
 
             }
-            g.setColor(new Color(225, 225, 0, 100));
-            for (OnGridTile tile : physicsTilesAround.tiles) {
-                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-                        tile.rect.h);
-            }
-            g.setColor(Color.BLACK);
-            for (OnGridTile tile : physicsTilesAround.debugTiles) {
-                g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-                        tile.rect.h);
-            }
-            g.setColor(new Color(0, 225, 0, 190));
-            for (OnGridTile tile : physicsTilesAround.intersectedTiles) {
-                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-                        tile.rect.h);
-            }
+            // g.setColor(new Color(225, 225, 0, 100));
+            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.tiles)) {
+            //     g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+            //             tile.rect.h);
+            // }
+            // g.setColor(Color.BLACK);
+            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.debugTiles)) {
+            //     g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+            //             tile.rect.h);
+            // }
+            // g.setColor(new Color(0, 225, 0, 190));
+            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.intersectedTiles)) {
+            //     g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+            //             tile.rect.h);
+            // }
 
         } else {
             // System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        g.setColor(new Color(0, 0, 0, 50));
-        g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+        // g.setColor(new Color(0, 0, 0, 50));
+        // g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
 
     }
 }
@@ -811,13 +824,10 @@ public class App extends JFrame {
                 if (player != null) {
                     player.render(g);
                 }
-                // Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
-                // g.setFont(font);
-                // g.setColor(Color.BLACK);
-                // g.drawString("Actual Location in the memory ->", (int)(player.alphaX) -
-                // 340,(int)(player.alphaY + 40));
-                // g.drawString("Rendered using Camera Offset -> ", FRAME_WIDTH/2 - 340,
-                // FRAME_HEIGHT/2);
+                Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
+                g.setFont(font);
+                g.setColor(Color.BLACK);
+                g.drawString("Game Version: 1.0.0", 30, 30);
             }
         };
         add(panel);
@@ -1020,7 +1030,7 @@ public class App extends JFrame {
 class GameImage {
     public BufferedImage loadImage(String path) {
         try {
-            var url = getClass().getResource(path);
+            var url = getClass().getResource("/" + path);
             if (url == null) {
                 throw new RuntimeException("Resource not Found : " + path);
             }
