@@ -1,0 +1,12 @@
+GUIDE TO RUN THE GAME.jar file
+
+STEP 1: You must have java installed.
+
+Step 2: Place the game-version.jar file in desired folder
+
+Step 3: Open that folder in terminal. (Like VS Code terminal, etc).
+
+Step 4: Execute this command, 
+        java -jar game-version.jar
+
+GAME OPENS !!!!
