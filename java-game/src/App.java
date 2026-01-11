@@ -2,6 +2,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -91,6 +92,7 @@ class TileVariantRegistry {
 }
 
 class TileMap {
+    Map<String, OnGridTile> ongridTilesMap;
     OnGridTile[] onGridTiles;
     int tilesCount;
     TileVariantRegistry registry;
@@ -98,6 +100,7 @@ class TileMap {
 
     public TileMap(MapData map, TileVariantRegistry registry, Camera camera) {
         this.registry = registry;
+        this.ongridTilesMap = new HashMap<String, OnGridTile>();
         loadMapData(map);
         this.camera = camera;
     }
@@ -110,7 +113,7 @@ class TileMap {
                         (int) (tile.rect.yPos + camera.cameraOffsetY), tile.rect.w,
                         tile.rect.h, null);
                 // rendering actual position of tiles
-                g.setColor(Color.BLACK);
+                g.setColor(new Color(225, 0, 0, 225));
                 g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w, tile.rect.h);
             }
         }
@@ -120,7 +123,7 @@ class TileMap {
         if (mapData == null)
             return;
 
-        tilesCount = mapData.tiles.size(); // Yesko meaning bujhnu xa
+        tilesCount = mapData.tiles.size();
         onGridTiles = new OnGridTile[tilesCount];
 
         int i = 0;
@@ -132,6 +135,9 @@ class TileMap {
             }
             onGridTiles[i++] = new OnGridTile(variant, tile.gridX * mapData.tileSize, tile.gridY * mapData.tileSize,
                     mapData.tileSize, mapData.tileSize);
+            ongridTilesMap.put((tile.gridX + "," + tile.gridY),
+                    new OnGridTile(variant, tile.gridX * mapData.tileSize, tile.gridY * mapData.tileSize,
+                            mapData.tileSize, mapData.tileSize));
         }
     }
 }
@@ -164,11 +170,17 @@ class Maploader {
 class PhysicsEntity {
     double prevX, prevY, alphaX, alphaY;
     PhysicsRect rect; // in pixels
+    int gridX, gridY;
 
     public PhysicsEntity(double x, double y, int w, int h) {
         this.rect = new PhysicsRect(x, y, w, h);
         this.alphaX = x;
         this.alphaY = y;
+    }
+
+    public void updateGridPos(int tileSize) {
+        gridX = (int) (rect.getCenterX() / tileSize);
+        gridY = (int) (rect.getCenterY() / tileSize);
     }
 }
 
@@ -202,13 +214,62 @@ enum PlayerAnimState {
     JUMP_TRANSITION,
     WALL_SLIDE,
     WALL_CONTACT,
-    WALL_JUMP
+    WALL_JUMP,
+    WALL_CLIMB
 }
 
 enum WallState {
     NONE,
     HOLDING,
-    SLIDING
+    SLIDING,
+    CLIMBING
+}
+
+class PhysicsTilesAround {
+    List<OnGridTile> tiles = new ArrayList<>();
+    List<OnGridTile> debugTiles = new ArrayList<>();
+    List<OnGridTile> intersectedTiles = new ArrayList<>();
+    int tilesCount = 0;
+    int tilesCountY, tilesCountX;
+    PhysicsEntity entity;
+    int tileSize;
+    int array[];
+    TileMap map;
+
+    public PhysicsTilesAround(PhysicsEntity entity, TileMap map, int tileSize) {
+        this.entity = entity;
+        this.map = map;
+        this.tileSize = tileSize;
+    }
+
+    public void updatePhysicsTilesAround() {
+        tiles.clear();
+        debugTiles.clear();
+        int leftTile = (int) Math.floor(entity.rect.xPos / tileSize);
+        int rightTile = (int) Math.floor((entity.rect.xPos + entity.rect.w - 1) / tileSize);
+        int topTile = (int) Math.floor(entity.rect.yPos / tileSize);
+        int bottomTile = (int) Math.floor((entity.rect.yPos + entity.rect.h - 1) / tileSize);
+
+        // Expanding collision search area
+        int startX = leftTile - 2;
+        int endX = rightTile + 2;
+        int startY = topTile - 2;
+        int endY = bottomTile + 2;
+
+        for (int y = startY; y <= endY; y++) {
+            for (int x = startX; x <= endX; x++) {
+                OnGridTile tile = map.ongridTilesMap.get(x + "," + y);
+                if (tile != null) {
+                    tiles.add(tile);
+                    debugTiles.add(tile);
+                } else {
+                    debugTiles.add(new OnGridTile(null, x * tileSize, y * tileSize, tileSize, tileSize));
+                }
+
+            }
+        }
+
+    }
 }
 
 class Player extends PhysicsEntity {
@@ -222,6 +283,7 @@ class Player extends PhysicsEntity {
     RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
     double imageScalingFactor = 1.0;
     int spriteW, spriteH;
+    PhysicsTilesAround physicsTilesAround;
 
     // Player Animation States
     Animation currentAnimation;
@@ -235,6 +297,8 @@ class Player extends PhysicsEntity {
     boolean onGround = false, onAir = false, onJumpTransition = false;
     boolean isTouchingSideWall = false;
     double holdingWallTimer = 0.0; // seconds before the player starts sliding downwards on the wall
+    boolean climbHandeled = true;
+    double climbTimer = 0.0;
     final double gravityFactor;
     double fallFactor, frictionalFactor = 1;
     final double terminalVelocity;
@@ -269,8 +333,56 @@ class Player extends PhysicsEntity {
         this.jumpTransitionVelocity = terminalVelocity * 0.3;
     }
 
+    boolean canWallClimb() {
+        if (!isTouchingSideWall || onGround)
+            return false;
+        double topMostTileYpos = Double.MAX_VALUE;
+        for (OnGridTile tile : physicsTilesAround.tiles) {
+            if (tile == null || tile.tileVariant == null)
+                continue;
+
+            if (facingRight) {
+                if (tile.rect.xPos > this.rect.xPos && tile.rect.yPos < topMostTileYpos) {
+                    topMostTileYpos = tile.rect.yPos;
+                }
+            } else {
+                if (tile.rect.xPos < this.rect.xPos && tile.rect.yPos < topMostTileYpos) {
+                    topMostTileYpos = tile.rect.yPos;
+                }
+            }
+
+        }
+        if (isTouchingSideWall && (this.rect.yPos <= topMostTileYpos + 32 && this.rect.yPos >= topMostTileYpos + 16)) {
+            return true;
+
+        } else
+            return false;
+    }
+
     boolean canWallInteract() {
-        return !onGround && isTouchingSideWall && velocityY > 0;
+        if (onGround || !isTouchingSideWall) {
+            return false;
+        }
+        double topMostTileYpos = Double.MAX_VALUE;
+        for (OnGridTile tile : physicsTilesAround.tiles) {
+            if (tile == null || tile.tileVariant == null)
+                continue;
+
+            if (facingRight) {
+                if (tile.rect.xPos > this.rect.xPos && tile.rect.yPos < topMostTileYpos) {
+                    topMostTileYpos = tile.rect.yPos;
+                }
+            } else {
+                if (tile.rect.xPos < this.rect.xPos && tile.rect.yPos < topMostTileYpos) {
+                    topMostTileYpos = tile.rect.yPos;
+                }
+            }
+        }
+        if (topMostTileYpos <= this.rect.yPos - 32) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public void jump() {
@@ -315,6 +427,8 @@ class Player extends PhysicsEntity {
             isFalling = false;
         }
         fallFactor = isFalling ? 1.9 : 1.0;
+        updateGridPos(32);
+        physicsTilesAround.updatePhysicsTilesAround();
 
         // System.out.println(" IsJumping :" +isJumping +" IsFalling :" +isFalling +
         // "Transition :" + onJumpTransition+ "," + velocityY);
@@ -329,7 +443,9 @@ class Player extends PhysicsEntity {
         // moving in y direction--
         // (velocityY * moving[1]) needs to be added to move up and down
         prevY = rect.yPos;
-
+        if (wallState.equals(WallState.CLIMBING)) {
+            velocityY = 0;
+        }
         // calculating displacement using initial velocity of the frame
         dy = velocityY * dt / 2;
         rect.yPos += dy;
@@ -342,27 +458,59 @@ class Player extends PhysicsEntity {
         // calculating displacement using final velocity of the frame
         velocityY = Math.min(velocityY + (this.game.ACCLN_DUE_TO_GRAVITY * fallFactor * gravityFactor * dt),
                 terminalVelocity);
-
+        if (wallState.equals(WallState.CLIMBING)) {
+            velocityY = 0;
+        }
         dy = velocityY * dt / 2;
         rect.yPos += dy;
         dyAccumulator += dy;
 
         // resolving y collision
         resolveCollisionY();
-        if (canWallInteract()) {
+        if (canWallClimb()) {
+            wallState = WallState.CLIMBING;
+            climbTimer += dt;
+            OnGridTile topTile = null;
+            double topMostY = Double.MAX_VALUE;
+            // finding toptile once only
+            if (climbTimer > 1) {
+                for (OnGridTile tile : physicsTilesAround.tiles) {
+                    if (tile == null || tile.tileVariant == null)
+                        continue;
 
+                    if (facingRight && tile.rect.xPos > rect.xPos && tile.rect.yPos < topMostY) {
+                        topMostY = tile.rect.yPos;
+                        topTile = tile;
+                    } else if (!facingRight && tile.rect.xPos < rect.xPos && tile.rect.yPos < topMostY) {
+                        topMostY = tile.rect.yPos;
+                        topTile = tile;
+                    }
+                }
+            }
+            // Snap player on top of the wall tile if reached
+            if (topTile != null && climbTimer >= 1) {
+                climbTimer = 0;
+                rect.yPos = topMostY - rect.h;
+                wallState = WallState.NONE;
+                holdingWallTimer = 0;
+            }
+        } else if (canWallInteract()) {
             if (wallState == WallState.NONE) {
                 wallState = WallState.HOLDING;
                 holdingWallTimer = 0;
+                climbTimer = 0;
             }
 
             holdingWallTimer += dt;
 
-            if (holdingWallTimer < 1.0) {
+            if (holdingWallTimer < 0.5) {
+                // System.out.println("Hold");
+
                 // HOLD
                 velocityY = 0;
             } else {
-                // SLIDE
+                // SLIDE63
+                // System.out.println("Slide");
                 wallState = WallState.SLIDING;
                 velocityY = Math.min(velocityY, 80); // slide speed
             }
@@ -371,6 +519,7 @@ class Player extends PhysicsEntity {
             // reset
             wallState = WallState.NONE;
             holdingWallTimer = 0;
+            climbTimer = 0;
         }
 
         // Ressetting
@@ -381,41 +530,50 @@ class Player extends PhysicsEntity {
             airTimeFrames = 0;
             onAir = false;
         }
+        updateGridPos(32);
     }
 
     public void resolveCollisionX() {
-        for (OnGridTile tile : game.tileMap.onGridTiles) {
-            if (this.rect.intersects(tile.rect)) {
-
-                // moving right
-                if (rect.xPos > prevX) {
-                    rect.xPos = tile.rect.xPos - rect.w;
-                    isTouchingSideWall = true;
-                }
-                // moving left
-                else if (rect.xPos < prevX) {
-                    rect.xPos = tile.rect.xPos + tile.rect.w;
-                    isTouchingSideWall = true;
+        // for debug only
+        physicsTilesAround.intersectedTiles.clear();
+        for (OnGridTile tile : physicsTilesAround.tiles) {
+            if (tile != null) {
+                if (this.rect.intersects(tile.rect)) {
+                    physicsTilesAround.intersectedTiles.add(tile);
+                    // moving right
+                    if (rect.xPos > prevX) {
+                        rect.xPos = tile.rect.xPos - rect.w;
+                        isTouchingSideWall = true;
+                    }
+                    // moving left
+                    else if (rect.xPos < prevX) {
+                        rect.xPos = tile.rect.xPos + tile.rect.w;
+                        isTouchingSideWall = true;
+                    }
                 }
             }
+
         }
     }
 
     public void resolveCollisionY() {
         boolean groundedThisStep = false;
-        for (OnGridTile tile : game.tileMap.onGridTiles) {
-            if (this.rect.intersects(tile.rect)) {
-                // moving down in a tile
-                if (velocityY > 0) {
-                    rect.yPos = tile.rect.yPos - rect.h;
-                    groundedThisStep = true;
-                    this.velocityY = 0;
-                    this.jumps = 2;
-                }
-                // moving up in a tile
-                else if (velocityY < 0) {
-                    rect.yPos = tile.rect.yPos + tile.rect.h;
-                    this.velocityY = 0;
+        for (OnGridTile tile : physicsTilesAround.tiles) {
+            if (tile != null) {
+                if (this.rect.intersects(tile.rect)) {
+                    physicsTilesAround.intersectedTiles.add(tile);
+                    // moving down in a tile
+                    if (velocityY > 0) {
+                        rect.yPos = tile.rect.yPos - rect.h;
+                        groundedThisStep = true;
+                        this.velocityY = 0;
+                        this.jumps = 2;
+                    }
+                    // moving up in a tile
+                    else if (velocityY < 0) {
+                        rect.yPos = tile.rect.yPos + tile.rect.h;
+                        this.velocityY = 0;
+                    }
                 }
             }
         }
@@ -423,12 +581,13 @@ class Player extends PhysicsEntity {
     }
 
     public void updateAnimation() {
-        if(wallState.equals(WallState.HOLDING)){
+        if (wallState.equals(WallState.CLIMBING)) {
+            this.nextAnimState = PlayerAnimState.WALL_CLIMB;
+        } else if (wallState.equals(WallState.HOLDING)) {
             this.nextAnimState = PlayerAnimState.WALL_CONTACT;
-        }else if(wallState.equals(WallState.SLIDING)){
+        } else if (wallState.equals(WallState.SLIDING)) {
             this.nextAnimState = PlayerAnimState.WALL_SLIDE;
-        }
-        else if (onAir) {
+        } else if (onAir) {
             if (onJumpTransition) {
                 this.nextAnimState = PlayerAnimState.JUMP_TRANSITION;
             } else if (isJumping) {
@@ -446,6 +605,9 @@ class Player extends PhysicsEntity {
         if (nextAnimState != currAnimState) {
             currAnimState = nextAnimState;
             switch (currAnimState) {
+                case WALL_CLIMB:
+                    this.currentAnimation = game.playerWallClimb;
+                    break;
                 case WALL_CONTACT:
                     this.currentAnimation = game.playerWallContact;
                     break;
@@ -500,10 +662,10 @@ class Player extends PhysicsEntity {
                         sprite.getWidth() + renderOffset.w,
                         sprite.getHeight() + renderOffset.h, null);
 
-                g.setColor(Color.BLUE);
-                g.drawRect(((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
-                        sprite.getWidth() + renderOffset.w,
-                        sprite.getHeight() + renderOffset.h);
+                // g.setColor(Color.BLUE);
+                // g.drawRect(((int) alphaX) + renderOffset.x, ((int) alphaY) + renderOffset.y,
+                // sprite.getWidth() + renderOffset.w,
+                // sprite.getHeight() + renderOffset.h);
 
             } else {
                 g.drawImage(sprite, ((int) alphaX) - renderOffset.x + rect.w + (int) (game.camera.cameraOffsetX),
@@ -511,12 +673,27 @@ class Player extends PhysicsEntity {
                         -sprite.getWidth() - renderOffset.w,
                         sprite.getHeight() + renderOffset.h, null);
 
-                g.setColor(Color.BLUE);
-                g.drawRect(((int) alphaX) - renderOffset.x + rect.w - renderOffset.w -
-                        sprite.getWidth(),
-                        ((int) alphaY) + renderOffset.y,
-                        sprite.getWidth() + renderOffset.w, sprite.getHeight() + renderOffset.h);
+                // g.setColor(Color.BLUE);
+                // g.drawRect(((int) alphaX) - renderOffset.x + rect.w - renderOffset.w -
+                // sprite.getWidth(),
+                // ((int) alphaY) + renderOffset.y,
+                // sprite.getWidth() + renderOffset.w, sprite.getHeight() + renderOffset.h);
 
+            }
+            g.setColor(new Color(225, 225, 0, 100));
+            for (OnGridTile tile : physicsTilesAround.tiles) {
+                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h);
+            }
+            g.setColor(Color.BLACK);
+            for (OnGridTile tile : physicsTilesAround.debugTiles) {
+                g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h);
+            }
+            g.setColor(new Color(0, 225, 0, 190));
+            for (OnGridTile tile : physicsTilesAround.intersectedTiles) {
+                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h);
             }
 
         } else {
@@ -524,8 +701,8 @@ class Player extends PhysicsEntity {
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        g.setColor(Color.GREEN);
-        g.drawRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+        g.setColor(new Color(0, 0, 0, 50));
+        g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
 
     }
 }
@@ -550,12 +727,12 @@ class Camera {
     }
 
     public void updateCameraOffset() {
-        //cameraOffsetX = -(player.rect.getCenterX() - frameW / 2);
-        //cameraOffsetY = -(player.rect.getCenterY() - frameH / 2);
+        cameraOffsetX = -(player.rect.getCenterX() - frameW / 2);
+        cameraOffsetY = -(player.rect.getCenterY() - frameH / 2);
     }
 }
 
-class App extends JFrame {
+public class App extends JFrame {
     // Class Constants
     private static final int FRAME_WIDTH = 1080;
     private static final int FRAME_HEIGHT = 800;
@@ -598,6 +775,7 @@ class App extends JFrame {
     // tiles Variables
     TileVariantRegistry tileVariantRegistry = new TileVariantRegistry();
     TileMap tileMap;
+    MapData map;
 
     public App() {
         setTitle("Game");
@@ -605,7 +783,7 @@ class App extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         loadAll();
 
-        MapData map = Maploader.loadMap("map1.json");
+        map = Maploader.loadMap("map1.json");
 
         // tiles
         // player
@@ -614,6 +792,7 @@ class App extends JFrame {
         // camera
         camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT);
         tileMap = new TileMap(map, tileVariantRegistry, camera);
+        player.physicsTilesAround = new PhysicsTilesAround(player, tileMap, 32);
 
         // Add a custom drawing panel
         this.panel = new JPanel() {
@@ -736,6 +915,8 @@ class App extends JFrame {
         playerWallContact.setAnimRenderOffset(-3, 0, 0, 0);
         playerWallSlide = new Animation("player/wallSlide", 2, 10, 32, 32, true);
         playerWallSlide.setAnimRenderOffset(-3, 0, 0, 0);
+        playerWallClimb = new Animation("player/wallClimb", 7, 8, 32, 32, false);
+        playerWallClimb.setAnimRenderOffset(0, 2, 0, 0);
     }
 
     public void run(boolean running) {
