@@ -3,21 +3,21 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 
 //for json reader
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import com.google.gson.GsonBuilder;
 
 //for image and file handels
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 
-import java.io.FileReader;
+import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.InputStream;
 
 class Rect {
     double xPos, yPos;
@@ -115,7 +115,8 @@ class TileMap {
                         tile.rect.h, null);
                 // rendering actual position of tiles
                 // g.setColor(new Color(225, 0, 0, 225));
-                // g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w, tile.rect.h);
+                // g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                // tile.rect.h);
             }
         }
     }
@@ -169,6 +170,19 @@ class MapData {
 // }
 
 class Maploader {
+    public static void printJson(String resourcePath) {
+        try (InputStream is = App.class.getResourceAsStream("/" + resourcePath);
+                InputStreamReader isr = new InputStreamReader(is);
+                BufferedReader br = new BufferedReader(isr)) {
+
+            br.lines().forEach(System.out::println);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    //
     public static MapData loadMap(String resourcePath) {
         Gson gson = new Gson();
         try (var reader = new InputStreamReader(App.class.getResourceAsStream("/" + resourcePath))) {
@@ -215,7 +229,6 @@ class InputState {
     boolean movingDown = false; // s
     boolean isSprinting = false; // shift
     boolean jumpPressed = false; // w
-    boolean jumpHandeled = false;
 }
 
 enum PlayerAnimState {
@@ -300,12 +313,15 @@ class Player extends PhysicsEntity {
 
     // Player Animation States
     Animation currentAnimation;
+    Map<PlayerAnimState, AnimationPlayer> animPlayerMap = new EnumMap<PlayerAnimState, AnimationPlayer>(
+            PlayerAnimState.class);
+    AnimationPlayer currAnimationPlayer;
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
 
     // Player states
     WallState wallState = WallState.NONE;
-    boolean isJumping = false;
+    boolean isJumping = false, jumpHandeled = false;
     boolean isMoving, facingRight, isFalling;
     boolean onGround = false, onAir = false, onJumpTransition = false;
     boolean isTouchingSideWall = false;
@@ -316,7 +332,10 @@ class Player extends PhysicsEntity {
     double fallFactor, frictionalFactor = 1;
     final double terminalVelocity;
 
-    int jumps = 2;
+    // One time triggers
+    boolean jumpTriggered = false;
+
+    int remainingJumps = 2;
     int airTimeFrames = 0;
     App game;
 
@@ -329,21 +348,38 @@ class Player extends PhysicsEntity {
         this.velocityY = 0.0;
         this.game = game;
         this.currAnimState = PlayerAnimState.IDLE;
-        this.currentAnimation = game.playerIdle;
+        if (animPlayerMap.isEmpty()) {
+            setAnimationPlayerMap();
+        }
+        this.currAnimationPlayer = animPlayerMap.get(PlayerAnimState.IDLE);
         this.isMoving = false;
         this.speedFactor = 1.0;
         this.facingRight = true;
         this.spriteW = 32;
         this.spriteH = 32;
         this.imageScalingFactor = 2;
-        sprite = currentAnimation.getCurrentFrame(game.deltaTime);
+        sprite = currAnimationPlayer.getCurrentFrame(game.deltaTime);
         updateAnimationRenderOffset();
         // this.renderOffset.x = (int) ((this.rect.w - (spriteW + renderOffset.w)) / 2);
         // this.renderOffset.y = (int) ((this.rect.h - (spriteH + renderOffset.h)));
         this.gravityFactor = 1;
         this.terminalVelocity = game.TERMINAL_VELOCITY * gravityFactor;
-        this.velocityX = 80.0 * imageScalingFactor;
+        this.velocityX = 67 * imageScalingFactor;
         this.jumpTransitionVelocity = terminalVelocity * 0.3;
+    }
+
+    public void setAnimationPlayerMap() {
+        System.out.println("ok");
+        animPlayerMap.put(PlayerAnimState.IDLE, new AnimationPlayer(game.playerIdle));
+        animPlayerMap.put(PlayerAnimState.RUN, new AnimationPlayer(game.playerRun));
+        animPlayerMap.put(PlayerAnimState.WALK, new AnimationPlayer(game.playerWalk));
+        animPlayerMap.put(PlayerAnimState.WALL_CLIMB, new AnimationPlayer(game.playerWallClimb));
+        animPlayerMap.put(PlayerAnimState.WALL_CONTACT, new AnimationPlayer(game.playerWallContact));
+        animPlayerMap.put(PlayerAnimState.WALL_JUMP, new AnimationPlayer(game.playerWallJump));
+        animPlayerMap.put(PlayerAnimState.WALL_SLIDE, new AnimationPlayer(game.playerWallSlide));
+        animPlayerMap.put(PlayerAnimState.JUMP_START, new AnimationPlayer(game.playerJumpStart));
+        animPlayerMap.put(PlayerAnimState.JUMP_FALL, new AnimationPlayer(game.playerJumpFall));
+        animPlayerMap.put(PlayerAnimState.JUMP_TRANSITION, new AnimationPlayer(game.playerJumpTransition));
     }
 
     boolean canWallClimb() {
@@ -399,10 +435,12 @@ class Player extends PhysicsEntity {
     }
 
     public void jump() {
-        this.jumps = Math.max(0, jumps - 1);
+        jumpTriggered = false;
+        this.remainingJumps = Math.max(0, remainingJumps - 1);
         this.onGround = false;
         this.isJumping = true;
         this.velocityY = -350;
+        this.jumpHandeled = false;
     }
 
     public void update(double dt, int[] moving) {
@@ -415,9 +453,12 @@ class Player extends PhysicsEntity {
         } else {
             this.isMoving = false;
         }
+        if (remainingJumps == 0) {
+            jumpTriggered = false;
+        }
+        if (jumpTriggered && !this.jumpHandeled && remainingJumps > 0) {
 
-        if (game.inputs.jumpPressed && !game.inputs.jumpHandeled && jumps < 10) {
-            game.inputs.jumpHandeled = true;
+            this.jumpHandeled = true;
             jump();
         }
 
@@ -580,7 +621,7 @@ class Player extends PhysicsEntity {
                         rect.yPos = tile.rect.yPos - rect.h;
                         groundedThisStep = true;
                         this.velocityY = 0;
-                        this.jumps = 2;
+                        this.remainingJumps = 2;
                     }
                     // moving up in a tile
                     else if (velocityY < 0) {
@@ -593,7 +634,7 @@ class Player extends PhysicsEntity {
         onGround = groundedThisStep;
     }
 
-    public void updateAnimation() {
+    public void updateAnimation(double dt) {
         if (wallState.equals(WallState.CLIMBING)) {
             this.nextAnimState = PlayerAnimState.WALL_CLIMB;
         } else if (wallState.equals(WallState.HOLDING)) {
@@ -619,42 +660,42 @@ class Player extends PhysicsEntity {
             currAnimState = nextAnimState;
             switch (currAnimState) {
                 case WALL_CLIMB:
-                    this.currentAnimation = game.playerWallClimb;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case WALL_CONTACT:
-                    this.currentAnimation = game.playerWallContact;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case WALL_SLIDE:
-                    this.currentAnimation = game.playerWallSlide;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case JUMP_TRANSITION:
-                    this.currentAnimation = game.playerJumpTransition;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case JUMP_START:
-                    this.currentAnimation = game.playerJumpStart;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case JUMP_FALL:
-                    this.currentAnimation = game.playerJumpFall;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case RUN:
-                    this.currentAnimation = game.playerRun;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case WALK:
-                    this.currentAnimation = game.playerWalk;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 case IDLE:
-                    this.currentAnimation = game.playerIdle;
+                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
                     break;
                 default:
                     break;
             }
-            currentAnimation.reset();
+            currAnimationPlayer.reset();
         }
-        sprite = currentAnimation.getCurrentFrame(game.deltaTime);
+        sprite = currAnimationPlayer.getCurrentFrame(game.deltaTime);
     }
 
     public void updateAnimationRenderOffset() {
-        this.animRenderOffset = currentAnimation.animRenderOffset;
+        this.animRenderOffset = currAnimationPlayer.animation.animRenderOffset;
 
         this.renderOffset.x = (int) ((this.rect.w - (sprite.getWidth() + renderOffset.w)) / 2) + animRenderOffset.x;
         this.renderOffset.y = (int) ((this.rect.h - (sprite.getHeight() + renderOffset.h))) + animRenderOffset.y;
@@ -693,29 +734,29 @@ class Player extends PhysicsEntity {
                 // sprite.getWidth() + renderOffset.w, sprite.getHeight() + renderOffset.h);
 
             }
-            // g.setColor(new Color(225, 225, 0, 100));
-            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.tiles)) {
-            //     g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-            //             tile.rect.h);
-            // }
-            // g.setColor(Color.BLACK);
-            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.debugTiles)) {
-            //     g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-            //             tile.rect.h);
-            // }
-            // g.setColor(new Color(0, 225, 0, 190));
-            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.intersectedTiles)) {
-            //     g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-            //             tile.rect.h);
-            // }
+            g.setColor(new Color(225, 225, 0, 100));
+            for (OnGridTile tile : new ArrayList<>(physicsTilesAround.tiles)) {
+                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h);
+            }
+            g.setColor(Color.BLACK);
+            for (OnGridTile tile : new ArrayList<>(physicsTilesAround.debugTiles)) {
+                g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h);
+            }
+            g.setColor(new Color(0, 225, 0, 190));
+            for (OnGridTile tile : new ArrayList<>(physicsTilesAround.intersectedTiles)) {
+                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+                        tile.rect.h);
+            }
 
         } else {
             // System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        // g.setColor(new Color(0, 0, 0, 50));
-        // g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+        g.setColor(new Color(0, 0, 0, 50));
+        g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
 
     }
 }
@@ -751,7 +792,7 @@ public class App extends JFrame {
     private static final int FRAME_HEIGHT = 800;
     private static final int FPS = 60;
 
-    private static final long GAME_LOOP_FREQUENCY = 80;
+    private static final long GAME_LOOP_FREQUENCY = 90;
     private static final long LOOP_DURATION_NS = 1_000_000_000 / GAME_LOOP_FREQUENCY;
     public long computedFrameDuration;
 
@@ -779,7 +820,7 @@ public class App extends JFrame {
     JPanel panel;
 
     // Entities
-    Player player;
+    Player player, player2;
     Camera camera;
     Asset assets;
     Animation playerIdle, playerWalk, playerRun, playerJumpStart, playerJumpFall, playerJumpTransition,
@@ -800,12 +841,14 @@ public class App extends JFrame {
 
         // tiles
         // player
-        this.player = new Player(this, 300, 50, 30, 90);
+        player = new Player(this, 300, 50, 30, 90);
+        player2 = new Player(this, 300, 40, 30, 90);
 
         // camera
         camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT);
         tileMap = new TileMap(map, tileVariantRegistry, camera);
         player.physicsTilesAround = new PhysicsTilesAround(player, tileMap, 32);
+        player2.physicsTilesAround = new PhysicsTilesAround(player2, tileMap, 32);
 
         // Add a custom drawing panel
         this.panel = new JPanel() {
@@ -823,6 +866,7 @@ public class App extends JFrame {
                 // Player render
                 if (player != null) {
                     player.render(g);
+                    player2.render(g);
                 }
                 Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
                 g.setFont(font);
@@ -841,11 +885,11 @@ public class App extends JFrame {
                 case KeyEvent.VK_D -> inputs.movingRight = pressed;
                 case KeyEvent.VK_SHIFT -> inputs.isSprinting = pressed;
                 case KeyEvent.VK_W -> {
-                    inputs.jumpPressed = pressed;
-                    if (pressed) {
-                    } else { // w is released
-                        inputs.jumpHandeled = false;
+                    if (!inputs.jumpPressed && pressed) {
+                        player.jumpTriggered = true;
+                        player2.jumpTriggered = true;
                     }
+                    inputs.jumpPressed = pressed;
                 }
                 case KeyEvent.VK_S -> inputs.movingDown = pressed;
             }
@@ -961,7 +1005,7 @@ public class App extends JFrame {
 
             interpolationFactor = frameStepAccumulator / UPDATE_STEP_DURATION;
             updateInterpolation(interpolationFactor);
-            updateAnimation();
+            updateAnimation(UPDATE_STEP_DURATION);
 
             // Render
             render();
@@ -989,8 +1033,10 @@ public class App extends JFrame {
         moving[0] = (inputs.movingRight ? 1 : 0) - (inputs.movingLeft ? 1 : 0);
         moving[1] = (inputs.movingDown ? 1 : 0) - (inputs.movingUp ? 1 : 0);
 
-        // Player Updates
         player.update(dt, moving);
+        player2.update(dt, moving);
+
+        // Player Updates
 
         // Other future entities updates here
         camera.updateCameraOffset();
@@ -1004,11 +1050,14 @@ public class App extends JFrame {
     public void updateInterpolation(double ipf) {
         // interpolation for player
         player.updateInterpolation(ipf);
+        player2.updateInterpolation(ipf);
     }
 
-    public void updateAnimation() {
+    public void updateAnimation(double dt) {
         player.updateAnimationRenderOffset();
-        player.updateAnimation();
+        player.updateAnimation(dt);
+        player2.updateAnimationRenderOffset();
+        player2.updateAnimation(dt);
     }
 
     public void lagSpike() {
@@ -1016,6 +1065,7 @@ public class App extends JFrame {
         for (int i = 0; i < 20000000; i++) {
             x += Math.sin(i) * Math.cos(i);
         }
+        System.out.println(x);
     }
 
     public void render() {
@@ -1057,9 +1107,9 @@ class Animation {
     int canvasW, canvasH; // pixels
     int spriteW, spriteH;
     BufferedImage[] frames;
-    boolean looping = true, isDone = false;
-    public static GameImage loader;
-    double frameDuration, animationTime = 0;
+    boolean looping = true;
+    public static GameImage loader = new GameImage();
+    double frameDuration;
     int currentFrame = 0;
     RenderOffset animRenderOffset = new RenderOffset(0, 0, 0, 0);
 
@@ -1069,7 +1119,6 @@ class Animation {
         this.frameDuration = (1.0 / animFrequency);
         this.spriteW = spriteW;
         this.spriteH = spriteH;
-        setLoaderObject();
         this.frames = loadAnimationFromManySprite(path, framesCount + 1);
         this.looping = loop;
     }
@@ -1083,7 +1132,6 @@ class Animation {
         this.spriteW = spriteW;
         this.spriteH = spriteH;
         this.frameDuration = (1.0 / animFrequency);
-        setLoaderObject();
         frames = loadAnimationFromSingleSprite(path);
         this.looping = loop;
     }
@@ -1117,25 +1165,36 @@ class Animation {
         imgs = loader.loadImagesFromFolder(path, imgCount);
         return imgs;
     }
+}
 
-    public BufferedImage getCurrentFrame(double dt) {
-        animationTime += dt;
-        currentFrame = (int) (animationTime / frameDuration) % (framesCount + 1);
-        if (!isDone && currentFrame == framesCount) {
-            isDone = true;
-        }
-        if (!looping && isDone) {
-            return frames[framesCount];
-        } else {
-            return frames[currentFrame];
-        }
+class AnimationPlayer {
+    Animation animation;
+    double animationTime = 0;
+    int currentFrame = 0;
+    boolean isDone = false;
 
+    public AnimationPlayer(Animation anim) {
+        animation = anim;
     }
 
     public void reset() {
         animationTime = 0;
         currentFrame = 0;
         isDone = false;
+    }
+
+    public BufferedImage getCurrentFrame(double dt) {
+        animationTime += dt;
+        currentFrame = (int) (animationTime / animation.frameDuration) % (animation.framesCount + 1);
+        if (!isDone && currentFrame == animation.framesCount) {
+            isDone = true;
+        }
+        if (!animation.looping && isDone) {
+            return animation.frames[animation.framesCount];
+        } else {
+            return animation.frames[currentFrame];
+        }
+
     }
 }
 

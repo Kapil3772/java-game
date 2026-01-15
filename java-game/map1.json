@@ -53,6 +53,17 @@
     {"type": "grass", "variant": 9, "gridX": 25, "gridY": 8},
     {"type": "grass", "variant": 21, "gridX": 26, "gridY": 8},
 
+    {"type": "grass", "variant": 6, "gridX": 26, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 27, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 28, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 29, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 30, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 32, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 33, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 34, "gridY": 6},
+    {"type": "grass", "variant": 13, "gridX": 35, "gridY": 6},
+    {"type": "grass", "variant": 5, "gridX": 31, "gridY": 6},
+
     {"type": "grass", "variant": 24, "gridX": 8, "gridY": 5},
     {"type": "grass", "variant": 25, "gridX": 9, "gridY": 5},
     {"type": "grass", "variant": 6, "gridX": 8, "gridY": 6},
