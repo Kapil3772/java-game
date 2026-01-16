@@ -2,18 +2,21 @@ import java.awt.image.BufferedImage;
 
 class AnimationPlayer {
     Animation animation;
-    double animationTime = 0;
+    double animationTime = 0.0;
     int currentFrame = 0;
+    int endFrameCounter = 1;
     boolean isDone = false;
+    BufferedImage fallBackImage = new GameImage().loadImage("player/idle/1.png");
 
     public AnimationPlayer(Animation anim) {
         animation = anim;
     }
 
     public void reset() {
-        animationTime = 0;
+        animationTime = 0.0;
         currentFrame = 0;
         isDone = false;
+        endFrameCounter = 0;
     }
 
     public BufferedImage getCurrentFrame(double dt) {

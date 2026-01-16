@@ -3,16 +3,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.List;
-
-//for json reader
-import com.google.gson.Gson;
-
-//for image and file handels
-import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.InputStream;
 
 //local imports
 
@@ -112,13 +102,13 @@ public class App extends JFrame {
         // tiles
         // player
         player = new Player(this, 300, 50, 30, 90);
-        player2 = new Player(this, 300, 40, 30, 90);
+        //player2 = new Player(this, 300, 40, 30, 90);
 
         // camera
-        camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT);
+        camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT, UPDATE_STEP_DURATION);
         tileMap = new TileMap(map, tileVariantRegistry, camera);
         player.physicsTilesAround = new PhysicsTilesAround(player, tileMap, 32);
-        player2.physicsTilesAround = new PhysicsTilesAround(player2, tileMap, 32);
+        //player2.physicsTilesAround = new PhysicsTilesAround(player2, tileMap, 32);
 
         // Add a custom drawing panel
         this.panel = new JPanel() {
@@ -136,12 +126,14 @@ public class App extends JFrame {
                 // Player render
                 if (player != null) {
                     player.render(g);
-                    player2.render(g);
+                    //player2.render(g);
                 }
                 Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
                 g.setFont(font);
                 g.setColor(Color.BLACK);
                 g.drawString("Game Version: 1.0.1", 30, 30);
+
+                camera.render(g);
             }
         };
         add(panel);
@@ -157,7 +149,7 @@ public class App extends JFrame {
                 case KeyEvent.VK_W -> {
                     if (!inputs.jumpPressed && pressed) {
                         player.jumpTriggered = true;
-                        player2.jumpTriggered = true;
+                        //player2.jumpTriggered = true;
                     }
                     inputs.jumpPressed = pressed;
                 }
@@ -273,10 +265,11 @@ public class App extends JFrame {
 
             // System.out.println("Physics Updates in this frame: " + updateCounter);
 
+            //Interpolation visual purpose ko lagi ho alphaX, alphaY nikalna
             interpolationFactor = frameStepAccumulator / UPDATE_STEP_DURATION;
             updateInterpolation(interpolationFactor);
-            updateAnimation(UPDATE_STEP_DURATION);
 
+            updateAnimation(deltaTime);
             // Render
             render();
 
@@ -304,7 +297,7 @@ public class App extends JFrame {
         moving[1] = (inputs.movingDown ? 1 : 0) - (inputs.movingUp ? 1 : 0);
 
         player.update(dt, moving);
-        player2.update(dt, moving);
+        //player2.update(dt, moving);
 
         // Player Updates
 
@@ -320,14 +313,14 @@ public class App extends JFrame {
     public void updateInterpolation(double ipf) {
         // interpolation for player
         player.updateInterpolation(ipf);
-        player2.updateInterpolation(ipf);
+        //player2.updateInterpolation(ipf);
     }
 
     public void updateAnimation(double dt) {
         player.updateAnimationRenderOffset();
         player.updateAnimation(dt);
-        player2.updateAnimationRenderOffset();
-        player2.updateAnimation(dt);
+        //player2.updateAnimationRenderOffset();
+        //player2.updateAnimation(dt);
     }
 
     public void lagSpike() {

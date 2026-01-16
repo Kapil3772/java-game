@@ -17,7 +17,7 @@ public class Animation {
         this.frameDuration = (1.0 / animFrequency);
         this.spriteW = spriteW;
         this.spriteH = spriteH;
-        this.frames = loadAnimationFromManySprite(path, framesCount + 1);
+        this.frames = loadAnimationFromManySprite(path, framesCount + 1); // +1 is for now because of asset's index is starting from 1
         this.looping = loop;
     }
 

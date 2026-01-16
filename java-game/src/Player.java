@@ -1,7 +1,6 @@
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
 import java.util.Map;
-import java.util.ArrayList;
 import java.awt.*;
 
 public class Player extends PhysicsEntity {
@@ -16,6 +15,8 @@ public class Player extends PhysicsEntity {
     double imageScalingFactor = 1.0;
     int spriteW, spriteH;
     PhysicsTilesAround physicsTilesAround;
+    OnGridTile topTile = null;
+    double topMostTileY;
 
     // Player Animation States
     Animation currentAnimation;
@@ -24,15 +25,17 @@ public class Player extends PhysicsEntity {
     AnimationPlayer currAnimationPlayer;
     PlayerAnimState currAnimState;
     PlayerAnimState nextAnimState;
+    boolean lockAnimationThisFrame = false;
 
     // Player states
+    boolean blockingInput = false;
     WallState wallState = WallState.NONE;
     boolean isJumping = false, jumpHandeled = false;
     boolean isMoving, facingRight, isFalling;
     boolean onGround = false, onAir = false, onJumpTransition = false;
     boolean isTouchingSideWall = false;
     double holdingWallTimer = 0.0; // seconds before the player starts sliding downwards on the wall
-    boolean climbHandeled = true;
+    boolean climbHandeled = true, isClimbing = false;
     double climbTimer = 0.0;
     final double gravityFactor;
     double fallFactor, frictionalFactor = 1;
@@ -109,7 +112,6 @@ public class Player extends PhysicsEntity {
         }
         if (isTouchingSideWall && (this.rect.yPos <= topMostTileYpos + 32 && this.rect.yPos >= topMostTileYpos + 16)) {
             return true;
-
         } else
             return false;
     }
@@ -150,28 +152,32 @@ public class Player extends PhysicsEntity {
     }
 
     public void update(double dt, int[] moving) {
-        if (moving[0] == 1) {
-            this.isMoving = true;
-            this.facingRight = true;
-        } else if (moving[0] == -1) {
-            this.isMoving = true;
-            this.facingRight = false;
+        if (!blockingInput) {
+            if (moving[0] == 1) {
+                this.isMoving = true;
+                this.facingRight = true;
+            } else if (moving[0] == -1) {
+                this.isMoving = true;
+                this.facingRight = false;
+            } else {
+                this.isMoving = false;
+            }
+            if (remainingJumps == 0) {
+                jumpTriggered = false;
+            }
+            if (jumpTriggered && !this.jumpHandeled && remainingJumps != 0) {
+                this.jumpHandeled = true;
+                jump();
+            }
+
+            if (game.inputs.isSprinting) {
+                speedFactor = 2.15;
+            } else {
+                speedFactor = 1;
+            }
         } else {
-            this.isMoving = false;
-        }
-        if (remainingJumps == 0) {
+            speedFactor = 0;
             jumpTriggered = false;
-        }
-        if (jumpTriggered && !this.jumpHandeled && remainingJumps > 0) {
-
-            this.jumpHandeled = true;
-            jump();
-        }
-
-        if (game.inputs.isSprinting) {
-            speedFactor = 2.15;
-        } else {
-            speedFactor = 1;
         }
 
         if (Math.abs(velocityY) < jumpTransitionVelocity && (wallState == WallState.NONE)) {
@@ -227,33 +233,51 @@ public class Player extends PhysicsEntity {
 
         // resolving y collision
         resolveCollisionY();
-        if (canWallClimb()) {
-            wallState = WallState.CLIMBING;
-            climbTimer += dt;
-            OnGridTile topTile = null;
-            double topMostY = Double.MAX_VALUE;
+        if (canWallClimb() && wallState != WallState.CLIMBING) {
+            isClimbing = true;
+            topMostTileY = Double.MAX_VALUE;
             // finding toptile once only
-            if (climbTimer > 1) {
-                for (OnGridTile tile : physicsTilesAround.tiles) {
-                    if (tile == null || tile.tileVariant == null)
-                        continue;
-
-                    if (facingRight && tile.rect.xPos > rect.xPos && tile.rect.yPos < topMostY) {
-                        topMostY = tile.rect.yPos;
-                        topTile = tile;
-                    } else if (!facingRight && tile.rect.xPos < rect.xPos && tile.rect.yPos < topMostY) {
-                        topMostY = tile.rect.yPos;
-                        topTile = tile;
-                    }
+            for (OnGridTile tile : physicsTilesAround.tiles) {
+                if (tile == null || tile.tileVariant == null) {
+                    continue;
+                }
+                if (facingRight && tile.rect.xPos > rect.xPos && tile.rect.yPos < topMostTileY) {
+                    topMostTileY = tile.rect.yPos;
+                    topTile = tile;
+                } else if (!facingRight && tile.rect.xPos < rect.xPos && tile.rect.yPos < topMostTileY) {
+                    topMostTileY = tile.rect.yPos;
+                    topTile = tile;
                 }
             }
-            // Snap player on top of the wall tile if reached
+        }
+        if (isClimbing) {
+            blockingInput = true;
+            wallState = WallState.CLIMBING;
+            climbTimer += dt;
+            // wall climb logic
             if (topTile != null && climbTimer >= 1) {
-                climbTimer = 0;
-                rect.yPos = topMostY - rect.h;
+                System.out.println("Player is snapping here");
+                rect.yPos = topMostTileY - rect.h;
+                if (facingRight) {
+                    rect.xPos = topTile.rect.left() + 10;
+                } else {
+                    rect.xPos = topTile.rect.right() - 10;
+                }
                 wallState = WallState.NONE;
-                holdingWallTimer = 0;
+                isTouchingSideWall = false;
+                onGround = true;
+                onAir = false;
+                isClimbing = false;
+                blockingInput = false;
+                climbTimer = 0;
+                currAnimState = PlayerAnimState.IDLE;
+                currAnimationPlayer = animPlayerMap.get(currAnimState);
+                currAnimationPlayer.reset();
+                sprite = currAnimationPlayer.getCurrentFrame(dt);
+                lockAnimationThisFrame = false;
+                return;
             }
+
         } else if (canWallInteract()) {
             if (wallState == WallState.NONE) {
                 wallState = WallState.HOLDING;
@@ -327,7 +351,7 @@ public class Player extends PhysicsEntity {
                         rect.yPos = tile.rect.yPos - rect.h;
                         groundedThisStep = true;
                         this.velocityY = 0;
-                        this.remainingJumps = 2;
+                        this.remainingJumps = 100;
                     }
                     // moving up in a tile
                     else if (velocityY < 0) {
@@ -341,12 +365,23 @@ public class Player extends PhysicsEntity {
     }
 
     public void updateAnimation(double dt) {
-        if (wallState.equals(WallState.CLIMBING)) {
-            this.nextAnimState = PlayerAnimState.WALL_CLIMB;
-        } else if (wallState.equals(WallState.HOLDING)) {
-            this.nextAnimState = PlayerAnimState.WALL_CONTACT;
-        } else if (wallState.equals(WallState.SLIDING)) {
-            this.nextAnimState = PlayerAnimState.WALL_SLIDE;
+        if (lockAnimationThisFrame) {
+            System.out.println("Im running");
+            currAnimationPlayer = animPlayerMap.get(currAnimState);
+            currAnimationPlayer.reset();
+            sprite = currAnimationPlayer.getCurrentFrame(dt);
+            lockAnimationThisFrame = false;
+            return;
+        }
+        if (!wallState.equals(WallState.NONE)) {
+            if (wallState.equals(WallState.CLIMBING)) {
+                System.out.println("Yeah");
+                this.nextAnimState = PlayerAnimState.WALL_CLIMB;
+            } else if (wallState.equals(WallState.HOLDING)) {
+                this.nextAnimState = PlayerAnimState.WALL_CONTACT;
+            } else if (wallState.equals(WallState.SLIDING)) {
+                this.nextAnimState = PlayerAnimState.WALL_SLIDE;
+            }
         } else if (onAir) {
             if (onJumpTransition) {
                 this.nextAnimState = PlayerAnimState.JUMP_TRANSITION;
@@ -364,40 +399,12 @@ public class Player extends PhysicsEntity {
         }
         if (nextAnimState != currAnimState) {
             currAnimState = nextAnimState;
-            switch (currAnimState) {
-                case WALL_CLIMB:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case WALL_CONTACT:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case WALL_SLIDE:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case JUMP_TRANSITION:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case JUMP_START:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case JUMP_FALL:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case RUN:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case WALK:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                case IDLE:
-                    this.currAnimationPlayer = animPlayerMap.get(currAnimState);
-                    break;
-                default:
-                    break;
-            }
+            currAnimationPlayer = animPlayerMap.get(currAnimState);
             currAnimationPlayer.reset();
         }
-        sprite = currAnimationPlayer.getCurrentFrame(game.deltaTime);
+        // System.out.println(currAnimState);
+        System.out.println(currAnimState);
+        sprite = currAnimationPlayer.getCurrentFrame(dt);
     }
 
     public void updateAnimationRenderOffset() {
@@ -410,6 +417,9 @@ public class Player extends PhysicsEntity {
     }
 
     public void updateInterpolation(double ipf) {
+        if (lockAnimationThisFrame) {
+            return;
+        }
         alphaX = prevX + (rect.xPos - prevX) * ipf;
         alphaY = prevY + (rect.yPos - prevY) * ipf;
     }
@@ -440,29 +450,30 @@ public class Player extends PhysicsEntity {
                 // sprite.getWidth() + renderOffset.w, sprite.getHeight() + renderOffset.h);
 
             }
-            g.setColor(new Color(225, 225, 0, 100));
-            for (OnGridTile tile : new ArrayList<>(physicsTilesAround.tiles)) {
-                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-                        tile.rect.h);
-            }
-            g.setColor(Color.BLACK);
-            for (OnGridTile tile : new ArrayList<>(physicsTilesAround.debugTiles)) {
-                g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-                        tile.rect.h);
-            }
-            g.setColor(new Color(0, 225, 0, 190));
-            for (OnGridTile tile : new ArrayList<>(physicsTilesAround.intersectedTiles)) {
-                g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
-                        tile.rect.h);
-            }
+            // g.setColor(new Color(225, 225, 0, 100));
+            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.tiles)) {
+            // g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+            // tile.rect.h);
+            // }
+            // g.setColor(Color.BLACK);
+            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.debugTiles)) {
+            // g.drawRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+            // tile.rect.h);
+            // }
+            // g.setColor(new Color(0, 225, 0, 190));
+            // for (OnGridTile tile : new ArrayList<>(physicsTilesAround.intersectedTiles))
+            // {
+            // g.fillRect((int) tile.rect.xPos, (int) tile.rect.yPos, tile.rect.w,
+            // tile.rect.h);
+            // }
 
         } else {
             // System.out.println("Sprite is null " + currAnimState);
             g.setColor(Color.RED); // fallback
             g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
         }
-        g.setColor(new Color(0, 0, 0, 50));
-        g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
+        // g.setColor(new Color(0, 0, 0, 50));
+        // g.fillRect((int) alphaX, (int) alphaY, rect.w, rect.h);
 
     }
 }
