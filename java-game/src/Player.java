@@ -78,7 +78,6 @@ public class Player extends PhysicsEntity {
     }
 
     public void setAnimationPlayerMap() {
-        System.out.println("ok");
         animPlayerMap.put(PlayerAnimState.IDLE, new AnimationPlayer(game.playerIdle));
         animPlayerMap.put(PlayerAnimState.RUN, new AnimationPlayer(game.playerRun));
         animPlayerMap.put(PlayerAnimState.WALK, new AnimationPlayer(game.playerWalk));
@@ -256,7 +255,6 @@ public class Player extends PhysicsEntity {
             climbTimer += dt;
             // wall climb logic
             if (topTile != null && climbTimer >= 1) {
-                System.out.println("Player is snapping here");
                 rect.yPos = topMostTileY - rect.h;
                 if (facingRight) {
                     rect.xPos = topTile.rect.left() + 10;
@@ -366,7 +364,6 @@ public class Player extends PhysicsEntity {
 
     public void updateAnimation(double dt) {
         if (lockAnimationThisFrame) {
-            System.out.println("Im running");
             currAnimationPlayer = animPlayerMap.get(currAnimState);
             currAnimationPlayer.reset();
             sprite = currAnimationPlayer.getCurrentFrame(dt);
@@ -375,7 +372,6 @@ public class Player extends PhysicsEntity {
         }
         if (!wallState.equals(WallState.NONE)) {
             if (wallState.equals(WallState.CLIMBING)) {
-                System.out.println("Yeah");
                 this.nextAnimState = PlayerAnimState.WALL_CLIMB;
             } else if (wallState.equals(WallState.HOLDING)) {
                 this.nextAnimState = PlayerAnimState.WALL_CONTACT;
@@ -402,8 +398,6 @@ public class Player extends PhysicsEntity {
             currAnimationPlayer = animPlayerMap.get(currAnimState);
             currAnimationPlayer.reset();
         }
-        // System.out.println(currAnimState);
-        System.out.println(currAnimState);
         sprite = currAnimationPlayer.getCurrentFrame(dt);
     }
 

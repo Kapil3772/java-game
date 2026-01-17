@@ -1,3 +1,41 @@
+# 📝 Devlog — 2026-01-17 | Game Version 1.0.1
+
+### 📌 Overview
+✨ Added camera smoothing (LERP) and a background sky.  
+- Fixed sudden teleportation of the camera when climbing walls.
+
+---
+
+### ✨ Features Added
+1. 🎯 Created a **Camera** object that follows the player proportionally to the distance between them.  
+2. 🖼 Added a **Background** image using the Background class, serving as the base for future background and parallax layers.
+
+---
+
+### 🖼 Visual / Gameplay Changes
+
+**Before:**  
+<img src="java-game/resources/devlog/gifs/before_camera_lerp.gif" width="500"> **⚠️ Weird camera snap**
+
+**After:**  
+<img src="java-game/resources/devlog/gifs/after_camera_lerp.gif" width="500"> **✅ Smooth camera movement**
+
+---
+
+### 👤 Contributors
+- @Kapil3772
+
+---
+
+### 🔜 Next Steps
+- ☁️ Add clouds in the game with looping functionality.  
+- ⚡ Render only the tiles currently visible in the game frame to ensure smooth performance, no matter the total number of tiles.
+
+---
+
+<br><br>
+
+
 # 📝 Devlog — 2026-01-11
 
 ### 📌 Overview

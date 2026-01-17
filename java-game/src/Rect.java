@@ -16,4 +16,19 @@ public class Rect {
     public double getCenterY() {
         return this.yPos + this.h / 2.0;
     }
+    public double top() {
+        return yPos;
+    }
+
+    public double bottom() {
+        return yPos + h;
+    }
+
+    public double left() {
+        return xPos;
+    }
+
+    public double right() {
+        return xPos + w;
+    }
 }

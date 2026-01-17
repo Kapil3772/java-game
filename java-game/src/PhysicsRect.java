@@ -11,20 +11,4 @@ public class PhysicsRect extends Rect {
                 this.yPos < r.yPos + r.h &&
                 this.xPos + this.w > r.xPos;
     }
-
-    public double top() {
-        return yPos;
-    }
-
-    public double bottom() {
-        return yPos + h;
-    }
-
-    public double left() {
-        return xPos;
-    }
-
-    public double right() {
-        return xPos + w;
-    }
 }

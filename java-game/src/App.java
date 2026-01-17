@@ -2,10 +2,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Map;
+import java.util.Random;
 import java.util.HashMap;
 
 //local imports
-
 
 class OnGridTile extends PhysicsEntity {
     final TileVariant tileVariant;
@@ -48,7 +48,7 @@ enum WallState {
 
 public class App extends JFrame {
     // Class Constants
-    private static final int FRAME_WIDTH = 1080;
+    private static final int FRAME_WIDTH = 1200;
     private static final int FRAME_HEIGHT = 800;
     private static final int FPS = 60;
 
@@ -91,24 +91,35 @@ public class App extends JFrame {
     TileMap tileMap;
     MapData map;
 
+    // Background layers
+    Background bg;
+    CloudVariantRegistry cloudVariantRegestry = new CloudVariantRegistry();
+    CloudManager cloudManager;
+    int CLOUD_COUNT = 30;
+    Random random = new Random();
+
     public App() {
         setTitle("Game");
         setSize(FRAME_WIDTH, FRAME_HEIGHT);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         loadAll();
-
+        bg = new Background();
         map = Maploader.loadMap("map1.json");
 
         // tiles
         // player
         player = new Player(this, 300, 50, 30, 90);
-        //player2 = new Player(this, 300, 40, 30, 90);
+        // player2 = new Player(this, 300, 40, 30, 90);
 
         // camera
         camera = new Camera(player, FRAME_WIDTH, FRAME_HEIGHT, UPDATE_STEP_DURATION);
+        
+        //Clouds
+        cloudManager = new CloudManager(CLOUD_COUNT, camera, cloudVariantRegestry, FRAME_WIDTH, FRAME_HEIGHT);
+
         tileMap = new TileMap(map, tileVariantRegistry, camera);
         player.physicsTilesAround = new PhysicsTilesAround(player, tileMap, 32);
-        //player2.physicsTilesAround = new PhysicsTilesAround(player2, tileMap, 32);
+        // player2.physicsTilesAround = new PhysicsTilesAround(player2, tileMap, 32);
 
         // Add a custom drawing panel
         this.panel = new JPanel() {
@@ -120,18 +131,30 @@ public class App extends JFrame {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g); // clear paper
+                bg.render(g);
+
+                //cloudManager.render(g);
                 // Tiles, other render for future
                 tileMap.render(g);
 
                 // Player render
                 if (player != null) {
                     player.render(g);
-                    //player2.render(g);
+                    // player2.render(g);
                 }
                 Font font = new Font("Arial", Font.BOLD, 20); // 24 is the font size
                 g.setFont(font);
                 g.setColor(Color.BLACK);
                 g.drawString("Game Version: 1.0.1", 30, 30);
+                // font = new Font("Arial", Font.BOLD, 35);
+                // g.setFont(font);
+                // g.drawString("After Camera LERP (linear interpolation)", 150, 120);
+                // font = new Font("Arial", Font.BOLD, 22);
+                // g.setFont(font);
+                // g.drawString("-> Camera offset is calculated w.r.t CAMERA object,  which follows Player", 150, 170);
+                // g.drawString("-> More the distance between player and camera, More the camera speed", 150, 200);
+                // g.drawString("-> When camera reaches near player its speed decreases making smooth camera movement", 150, 230);
+
 
                 camera.render(g);
             }
@@ -149,7 +172,7 @@ public class App extends JFrame {
                 case KeyEvent.VK_W -> {
                     if (!inputs.jumpPressed && pressed) {
                         player.jumpTriggered = true;
-                        //player2.jumpTriggered = true;
+                        // player2.jumpTriggered = true;
                     }
                     inputs.jumpPressed = pressed;
                 }
@@ -206,7 +229,10 @@ public class App extends JFrame {
         for (int i = 1; i <= 41; i++) {
             tileVariantRegistry.register("grass", i, loader.loadImage("tiles/grass/" + i + ".png"));
         }
-
+        // Cloud variants
+        for (int i = 1; i <= 5; i++) {
+            cloudVariantRegestry.register(i, loader.loadImage("clouds/" + i + ".png"));
+        }
     }
 
     public void loadAll() {
@@ -265,7 +291,7 @@ public class App extends JFrame {
 
             // System.out.println("Physics Updates in this frame: " + updateCounter);
 
-            //Interpolation visual purpose ko lagi ho alphaX, alphaY nikalna
+            // Interpolation visual purpose ko lagi ho alphaX, alphaY nikalna
             interpolationFactor = frameStepAccumulator / UPDATE_STEP_DURATION;
             updateInterpolation(interpolationFactor);
 
@@ -296,13 +322,13 @@ public class App extends JFrame {
         moving[0] = (inputs.movingRight ? 1 : 0) - (inputs.movingLeft ? 1 : 0);
         moving[1] = (inputs.movingDown ? 1 : 0) - (inputs.movingUp ? 1 : 0);
 
-        player.update(dt, moving);
-        //player2.update(dt, moving);
-
         // Player Updates
+        player.update(dt, moving);
+        // player2.update(dt, moving);
 
         // Other future entities updates here
         camera.updateCameraOffset();
+        cloudManager.update(dt);
         /*
          * if (framescount % 60 == 0) {
          * lagSpike();
@@ -313,14 +339,14 @@ public class App extends JFrame {
     public void updateInterpolation(double ipf) {
         // interpolation for player
         player.updateInterpolation(ipf);
-        //player2.updateInterpolation(ipf);
+        // player2.updateInterpolation(ipf);
     }
 
     public void updateAnimation(double dt) {
         player.updateAnimationRenderOffset();
         player.updateAnimation(dt);
-        //player2.updateAnimationRenderOffset();
-        //player2.updateAnimation(dt);
+        // player2.updateAnimationRenderOffset();
+        // player2.updateAnimation(dt);
     }
 
     public void lagSpike() {
@@ -339,6 +365,7 @@ public class App extends JFrame {
         new App();
     }
 }
+
 class Asset {
     GameImage assetLoader = new GameImage();
     Map<String, Animation> animations = new HashMap<>();
